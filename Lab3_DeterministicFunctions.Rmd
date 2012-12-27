@@ -1,0 +1,5 @@
+Title
+========================================================
+
+stat_function() for plotting functions w/o data (like curve!)
+
