@@ -148,19 +148,17 @@ NE <- ggplot(data.frame(x = c(0, 10)), aes(x)) + stat_function(fun = NegExp,
 NE
 ```
 
-![plot of chunk NegExp.full](figure/NegExp.full.png) 
+![plot of chunk guide.NegExp](figure/guide.NegExp.png) 
 
 
 I think that this sort of figure is a handy reference. You may want to turn this into a pdf and keep it handy or print it out. It's relatively easy to do:
 
 ```r
-pdf("NegativeExponential.pdf", width = 8, height = 6)  # open the pdf device
-print(NE)  # print the NE ggplot object
-dev.off()  # close the device, which should produce a pdf in your working directory
+ggsave(NE, file = "NegativeExponential.pdf", width = 8, height = 6)  # width in inches, by default
 ```
 
 
-More functions to explore
+Homework 1: More functions to explore
 -------------------------
 
 You should try to at least understand the behavior of, if not create a similar reference pdf of the following deterministic functions. The approach is the same. Try to code them yourself. If you have trouble with the math, see below.
@@ -216,11 +214,18 @@ $$
    
    
    
-   
+Homework 2: Which curve?
+-------------------------
+
+1. On page 96 in EMD, Bolker states that the logistic is popular because it is a simple sigmoid function, but then indicates that its "rational analogue," the Holling Type III functional response is also a simple sigmoid function. So can you get a Holling type III curve to look like a logistic or vice versa? (Say, from 0 to 10.) If so, under what parameters?
+
+2. What about the hyperbolic and the negative exponential?
+
+Send me one figure for each pair showing me how close you were able to get. Make sure you label your axes, etc., and indicate the parameter combinations you used. Closest fit in the class gets a beer.
 
 
-
-
+---------------
+---------------
 
 
 ```r
@@ -246,6 +251,24 @@ Logistic <- function(x, a = 0, b = 1) {
     exp(a + b * x)/(1 + exp(a + b * x))
 }
 ```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

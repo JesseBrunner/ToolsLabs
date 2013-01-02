@@ -86,7 +86,7 @@ qplot(x=c(0,10), stat="function", fun=NegExp, geom="line")
 
 If we want to plot more than one curve on the same axes, we need to use the `ggplot()` version of things, rather than `qplot()`. We are assigning color to different character strings in the `aes()` part, so that the function knows to create entries in a legend for each with the appropriate colors. We then have to specifiy values of the colors and the breaks within the `scale_colour_manual()` function. Note that the names are assigned alphabeticaly, so even though "`a=0.5, b=1`" is the last entry, it gets the first color listed (here, darkgreen).
 
-```{r NegExp.full}
+```{r guide.NegExp}
 NE <- ggplot(data.frame(x=c(0,10)), aes(x)) +   
 stat_function(fun=NegExp, geom="line", args = list(a=1, b = 0.5), aes(colour="a=1, b=0.5")) +   
 stat_function(fun=NegExp, geom="line", args = list(a=1, b = 1), aes(colour="a=1, b=1")) +   
@@ -100,12 +100,10 @@ NE
 
 I think that this sort of figure is a handy reference. You may want to turn this into a pdf and keep it handy or print it out. It's relatively easy to do:
 ```{r NegExp.pdf, eval=FALSE}
-pdf("NegativeExponential.pdf", width = 8, height = 6) # open the pdf device
-print(NE) # print the NE ggplot object
-dev.off() # close the device, which should produce a pdf in your working directory
+ggsave(NE, file="NegativeExponential.pdf", width = 8, height = 6) # width in inches, by default
 ```
 
-More functions to explore
+Homework 1: More functions to explore
 -------------------------
 
 You should try to at least understand the behavior of, if not create a similar reference pdf of the following deterministic functions. The approach is the same. Try to code them yourself. If you have trouble with the math, see below.
@@ -161,11 +159,18 @@ $$
    
    
    
-   
+Homework 2: Which curve?
+-------------------------
+
+1. On page 96 in EMD, Bolker states that the logistic is popular because it is a simple sigmoid function, but then indicates that its "rational analogue," the Holling Type III functional response is also a simple sigmoid function. So can you get a Holling type III curve to look like a logistic or vice versa? (Say, from 0 to 10.) If so, under what parameters?
+
+2. What about the hyperbolic and the negative exponential?
+
+Send me one figure for each pair showing me how close you were able to get. Make sure you label your axes, etc., and indicate the parameter combinations you used. Closest fit in the class gets a beer.
 
 
-
-
+---------------
+---------------
 
 ```{r morefunctions}
 Hyperbolic <- function(x, a = 2, b = 3) { a/(b+x) }  
@@ -177,7 +182,86 @@ Ricker <- function(x, a = 2, b = 3) { a*x * exp(-b*x) }
 Logistic <- function(x, a = 0, b = 1) { exp(a+b*x) / (1 + exp(a+b*x) ) }  
 ```
 
+```{r guide.Hyperbolic, echo=FALSE, eval=FALSE}
+
+#### NEED TO ADJUST PARAMETES & COLORS
+
+Hyp <- ggplot(data.frame(x=c(0,10)), aes(x)) +   
+stat_function(fun=Hyperbolic, geom="line", args = list(a=1, b = 0.5), aes(colour="a=1, b=0.5")) +   
+stat_function(fun=Hyperbolic, geom="line", args = list(a=1, b = 1), aes(colour="a=1, b=1")) +   
+stat_function(fun=Hyperbolic, geom="line", args = list(a=1, b = 5), aes(colour="a=1, b=5")) +   
+stat_function(fun=Hyperbolic, geom="line", args = list(a=1/2, b = 1), aes(colour="a=0.5, b=1")) +   	stat_function(fun=Hyperbolic, geom="line", args = list(a=5, b = 1), aes(colour="a=2, b=1")) +
+scale_colour_manual("Parameters", values=c("orange", "green","black","darkgreen", "red"), breaks=c("a=1, b=0.5", "a=1, b=1", "a=1, b=5", "a=0.5, b=1", "a=5, b=1")) +   
+labs(title = "Hyperbolic") + theme_bw()
+Hyp
+```
+
+```{r guide.MichMent, echo=FALSE, eval=FALSE}
+MM <- ggplot(data.frame(x=c(0,10)), aes(x)) +   
+stat_function(fun=MichMent, geom="line", args = list(a=1, b = 0.5), aes(colour="a=1, b=0.5")) +   
+stat_function(fun=MichMent, geom="line", args = list(a=1, b = 1), aes(colour="a=1, b=1")) +   
+stat_function(fun=MichMent, geom="line", args = list(a=1, b = 5), aes(colour="a=1, b=5")) +   
+stat_function(fun=MichMent, geom="line", args = list(a=1/2, b = 1), aes(colour="a=0.5, b=1")) +   	stat_function(fun=MichMent, geom="line", args = list(a=5, b = 1), aes(colour="a=2, b=1")) +
+scale_colour_manual("Parameters", values=c("orange", "green","black","darkgreen", "red"), breaks=c("a=1, b=0.5", "a=1, b=1", "a=1, b=5", "a=0.5, b=1", "a=5, b=1")) +   
+labs(title = "Michaelis-Menton") + theme_bw()
+MM
+```
 
 
+```{r guide.Holling3, echo=FALSE, eval=FALSE}
+H3 <- ggplot(data.frame(x=c(0,10)), aes(x)) +   
+stat_function(fun=Holling3, geom="line", args = list(a=1, b = 0.5), aes(colour="a=1, b=0.5")) +   
+stat_function(fun=Holling3, geom="line", args = list(a=1, b = 1), aes(colour="a=1, b=1")) +   
+stat_function(fun=Holling3, geom="line", args = list(a=1, b = 5), aes(colour="a=1, b=5")) +   
+stat_function(fun=Holling3, geom="line", args = list(a=1/2, b = 1), aes(colour="a=0.5, b=1")) +   	stat_function(fun=Holling3, geom="line", args = list(a=5, b = 1), aes(colour="a=2, b=1")) +
+scale_colour_manual("Parameters", values=c("orange", "green","black","darkgreen", "red"), breaks=c("a=1, b=0.5", "a=1, b=1", "a=1, b=5", "a=0.5, b=1", "a=5, b=1")) +   
+labs(title = "Holling Type III") + theme_bw()
+H3
+```
+
+```{r guide.Holling4, echo=FALSE, eval=FALSE}
+
+### add in parameter c
+H4 <- ggplot(data.frame(x=c(0,10)), aes(x)) +   
+stat_function(fun=Holling4, geom="line", args = list(a=1, b = 0.5), aes(colour="a=1, b=0.5")) +   
+stat_function(fun=Holling4, geom="line", args = list(a=1, b = 1), aes(colour="a=1, b=1")) +   
+stat_function(fun=Holling4, geom="line", args = list(a=1, b = 5), aes(colour="a=1, b=5")) +   
+stat_function(fun=Holling4, geom="line", args = list(a=1/2, b = 1), aes(colour="a=0.5, b=1")) +   	stat_function(fun=Holling4, geom="line", args = list(a=5, b = 1), aes(colour="a=2, b=1")) +
+scale_colour_manual("Parameters", values=c("orange", "green","black","darkgreen", "red"), breaks=c("a=1, b=0.5", "a=1, b=1", "a=1, b=5", "a=0.5, b=1", "a=5, b=1")) +   
+labs(title = "Holling Type IV") + theme_bw()
+H4
+```
+
+```{r guide.Monomolecular, echo=FALSE, eval=FALSE}
+Mono <- ggplot(data.frame(x=c(0,10)), aes(x)) +   
+stat_function(fun=Monomolecular, geom="line", args = list(a=1, b = 0.5), aes(colour="a=1, b=0.5")) +   
+stat_function(fun=Monomolecular, geom="line", args = list(a=1, b = 1), aes(colour="a=1, b=1")) +   
+stat_function(fun=Monomolecular, geom="line", args = list(a=1, b = 5), aes(colour="a=1, b=5")) +   
+stat_function(fun=Monomolecular, geom="line", args = list(a=1/2, b = 1), aes(colour="a=0.5, b=1")) +   	stat_function(fun=Monomolecular, geom="line", args = list(a=5, b = 1), aes(colour="a=2, b=1")) +
+scale_colour_manual("Parameters", values=c("orange", "green","black","darkgreen", "red"), breaks=c("a=1, b=0.5", "a=1, b=1", "a=1, b=5", "a=0.5, b=1", "a=5, b=1")) +   
+labs(title = "Monomolecular") + theme_bw()
+Mono
+```
 
 
+```{r guide.Ricker, echo=FALSE, eval=FALSE}
+Rick <- ggplot(data.frame(x=c(0,10)), aes(x)) +   
+stat_function(fun=Ricker, geom="line", args = list(a=1, b = 0.5), aes(colour="a=1, b=0.5")) +   
+stat_function(fun=Ricker, geom="line", args = list(a=1, b = 1), aes(colour="a=1, b=1")) +   
+stat_function(fun=Ricker, geom="line", args = list(a=1, b = 5), aes(colour="a=1, b=5")) +   
+stat_function(fun=Ricker, geom="line", args = list(a=1/2, b = 1), aes(colour="a=0.5, b=1")) +   	stat_function(fun=Ricker, geom="line", args = list(a=5, b = 1), aes(colour="a=2, b=1")) +
+scale_colour_manual("Parameters", values=c("orange", "green","black","darkgreen", "red"), breaks=c("a=1, b=0.5", "a=1, b=1", "a=1, b=5", "a=0.5, b=1", "a=5, b=1")) +   
+labs(title = "Ricker") + theme_bw()
+Rick
+```
+
+```{r guide.Logistic, echo=FALSE, eval=FALSE}
+Logist <- ggplot(data.frame(x=c(0,10)), aes(x)) +   
+stat_function(fun=Logistic, geom="line", args = list(a=1, b = 0.5), aes(colour="a=1, b=0.5")) +   
+stat_function(fun=Logistic, geom="line", args = list(a=1, b = 1), aes(colour="a=1, b=1")) +   
+stat_function(fun=Logistic, geom="line", args = list(a=1, b = 5), aes(colour="a=1, b=5")) +   
+stat_function(fun=Logistic, geom="line", args = list(a=1/2, b = 1), aes(colour="a=0.5, b=1")) +   	stat_function(fun=Logistic, geom="line", args = list(a=5, b = 1), aes(colour="a=2, b=1")) +
+scale_colour_manual("Parameters", values=c("orange", "green","black","darkgreen", "red"), breaks=c("a=1, b=0.5", "a=1, b=1", "a=1, b=5", "a=0.5, b=1", "a=5, b=1")) +   
+labs(title = "Logistic") + theme_bw()
+Logist
+```

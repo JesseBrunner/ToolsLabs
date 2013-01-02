@@ -21,6 +21,9 @@ ReedfrogFuncresp <- read.csv("ReedfrogFuncresp.csv", header = T)
 ReedfrogPred <- read.csv("ReedfrogPred.csv", header = T)
 ReedfrogSizepred <- read.csv("ReedfrogSizepred.csv", header = T)
 ```
+****MAKE SURE YOU POST FILES & LINK HERE ****
+
+
 The `header = T` just tells R that the first line is the header row, where you keep all of the names of the variables. This is important because if there are _any_ characters in a column such as a the name of the variable or even a space after a number (a space is a character), then R treats the whole column as if it were characters and converts it into a factor.  
 Note, too, that if you have your data stored somewhere else, you'll need to specify the full path of the file. Alternatively in RStudio you can use the "Import Dataset" button in the workspace tab, but that's cheating!  
 If you get an error, you probably misâ€specified the location or the file was not in the right format.
@@ -225,10 +228,7 @@ All of basic documentation of the ggplot2 package can be found here http://docs.
 
 Homework
 -----------------
-With the data in the file at
-http://www.esf.edu/efb/brunner/Rworkshop/RsylvaticaData.xls
-create one (1) publication-­â€quality plot that best displays the basic trend(s) in the data.  
-I am most interested in whether there is a trade-­â€off between the size (Snout­â€vent­â€length; SVL) at metamorphosis and time to metamorphosis, and whether this relationship changes depending on the initial size and the amount of food available.
+Using a dataset of your own (or perhaps your advisor's, or if you cannot find one, ask me) create one publication-quality plot showing the most important feature(s) of your data. Include a 1-2 sentence caption as you would in a manuscript. Please email me the pdf and caption.
 
 
 

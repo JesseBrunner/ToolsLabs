@@ -7,7 +7,7 @@ Our goals in this lab are to:
 2. learn to inspect and summarize data
 3. learn to explore data with plots
 
-We will use the several datasets used in Ben Bolker's book, Ecological Models and Data in R (aka, EMD) and create, more or less, the same figures he presents, _with one important exeption_: We will be using the functions in the ggplot2 package. 
+We will use the several datasets used in Ben Bolker's book, Ecological Models and Data in R (aka, EMD) and create, more or less, the same figures he presents, _with one important exeption_: We will be using the functions in the ggplot2 package. (You can, if you want, see how Ben makes these figures in base R and in ggplot2 here: http://www.math.mcmaster.ca/~bolker/classes/s756/labs/vislab.html)
 
 There are many good functions for plotting data in R. Unfortunately, they all end up being a bit limited under many circumstances, they often require different syntax or formulations, and often they make what should be very simple, rather difficult. I think the [ggplot2](http://ggplot2.org/) does away with many of these issues, most of the time. (Although to be honest, sometimes it makes fairly simple things incredibly frustrating to accomplish with its cryptic arguements... but we'll cross that bridge as we go.) The primary advantages of using it in this class are 1) that it is really nice for exploratory plotting and 2) that the figures are pretty much publication ready with little added work. Also, it seems to have a growing following, which means better and better documentation (e.g., http://wiki.stdout.org/rcookbook/Graphs/). But I digress. On with the show!
 

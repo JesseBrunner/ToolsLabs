@@ -1,0 +1,280 @@
+Stochastic distributions: EMD chapter 4
+========================================================
+(adapted from a lab by Jacqui Frair & John Stella, which was adapted from one by Jesse Brunner and from material produced by Ben Bolker)
+
+
+Our goals in this lab are to: 
+
+1. get a feel for a suite of important _stochastic_ distributions, seeing how their parameters changer their shapes and behavior
+2. understand the processes that might produce some of these distributions
+3. create reference figures that you can refer to when using these distributions
+
+Distribution Functions
+-----------------------
+R knows about lots of probability distributions. For each, it can generate random numbers drawn from the distribution ('deviates'); compute the cumulative distribution function and the probability distribution function; and compute the quantile function, which gives the x value such that $\int_0^x \! P(x) \, \mathrm{d} x$ (area under the curve from $0$ to $x$) is a specified value, such as 0.95. (Think about "tail areas" from standard statistics.)
+
+The figure below shows for an arbitrary distribution the R commands showing the density function (`ddist()`), cumulative distribution function (`pdist()`), quantile function (`qdist()`), and random‐deviate function (`rdist()`) where "`dist`" is the name of the distibutions (e.g., `binom`, `norm`, `pois`, `chi`, etc.). 
+
+![plot of chunk dgamma.dist.example](figure/dgamma.dist.example.png) 
+
+
+
+To illustrate how we can use these functions, let's consider the Binomial distribution, with which you are probably familiar. It is essentially a coin-flip where one outcome, say heads, is "success" or an "event."
+
+`rbinom(n, size, p)` gives `n` random samples each with `size` binomial trials (= coin flips) per sample, and `p` probability of success in each trial. For example, to simulate an experiment where 10 people (10 samples) each flip a coin 8 times (= 8 trials) with a fair coin (probability of success [1] is 0.5) we would use the following command:
+
+```r
+rbinom(n = 10, size = 8, p = 0.5)
+```
+
+```
+##  [1] 3 6 3 4 6 7 4 3 2 2
+```
+
+
+A simulation of 200 values from a binomial distribution with `size` = 12 (12 binary trials) and `p` = 0.15 per trial would look like this:
+
+
+```r
+successes <- rbinom(n = 200, size = 12, p = 0.15)
+
+library(ggplot2)
+qplot(successes, xlim = c(0, 15))
+```
+
+```
+## stat_bin: binwidth defaulted to range/30. Use 'binwidth = x' to adjust
+## this.
+```
+
+![plot of chunk unnamed-chunk-1](figure/unnamed-chunk-1.png) 
+
+
+`dbinom(x,size,p)` gives the value of the probability distribution function (pdf) for any given value of $x$.  Since the binomial is discrete, $x$ has to be an integer, and the pdf is just the probability of getting that many successes; if you try dbinom with a non-‐integer x, you’ll get a zero and a warning. (Note: For a continuous distribution the analog is the probability _density_ function, which calculates the probability density within some range $[a, b]$).
+
+
+```r
+
+dbinom(x = 2, size = 15, prob = 0.15)  # This is the probability of exactly 2 successes out of 15 trials, with a 15% chance of sucess on each trial
+```
+
+```
+## [1] 0.2856
+```
+
+```r
+x <- 0:15
+qplot(x, y = dbinom(x, size = 15, prob = 0.15), xlab = "number of successes", 
+    ylab = "probability")
+```
+
+![plot of chunk dbinom](figure/dbinom1.png) 
+
+```r
+qplot(x, ymax = dbinom(x, size = 15, prob = 0.15), ymin = 0, geom = "linerange", 
+    , xlab = "successes", ylab = "cummulative probability")
+```
+
+![plot of chunk dbinom](figure/dbinom2.png) 
+
+These plots show the probability of getting $x$ successes given 15 trials and a probability of 0.15. Notice that they sum to 1.
+
+
+`pbinom(q, size, p)` gives the value of the _cumulative_ distribution function (cdf) at `q`. That is, it gives the probability of getting `q` or fewer successes. (This should sound sort of familiar. It is close to the definition of the p-value, only in that case we are interested in the probability of `q` _or more_ successes, which is generally `1 - pbinom()`.) For example:
+
+
+```r
+pbinom(q = 2, size = 15, prob = 0.15)  # The probability of get 2 or fewer successes (i.e., 0, 1, or 2)
+```
+
+```
+## [1] 0.6042
+```
+
+```r
+sum(dbinom(x = 0:2, size = 15, prob = 0.15))  # We can get the same result by summing up the probabilities of getting 0, 1, and 2 successes
+```
+
+```
+## [1] 0.6042
+```
+
+```r
+
+qplot(x, y = pbinom(q = x, size = 15, prob = 0.15), ylim = c(0, 1), xlab = "number of successes", 
+    ylab = "cummulative probability")
+```
+
+![plot of chunk pbinom](figure/pbinom1.png) 
+
+```r
+qplot(x, ymax = pbinom(q = x, size = 15, prob = 0.15), ymin = 0, geom = "linerange", 
+    ylim = c(0, 1), xlab = "number of successes", ylab = "cummulative probability")
+```
+
+![plot of chunk pbinom](figure/pbinom2.png) 
+
+These plots then show the cummulative probability of getting $x$ or fewer successes. See that they quickly converge on 1.
+
+Finally, `qbinom(p, size, prob)` gives the quantile function, where `p` is the proportion of the area under the pdf, or identically, the value of the cdf you want to evaluate. The quantile function returns the value of $x$ associated with that cummulative probability, i.e., the value of $x$ such that $P(x ≤ p) = q$. (Note that the quantile function $Q$ is the inverse of the cumulative distribution function $C$: if $Q(p) = q$ then $C(q) = p$.)
+
+
+```r
+qbinom(p = 0.95, size = 15, prob = 0.15)  # There is a 95% probability that in 15 trials, each with 0.15 chance of success, there will be this many or fewer successe
+```
+
+```
+## [1] 5
+```
+
+```r
+
+qplot(x = c(0, 1), stat = "function", fun = qbinom, args = list(size = 15, prob = 0.15), 
+    geom = "step", xlab = "quantile (or proportion of area under pdf)", ylab = "number of successes")
+```
+
+![plot of chunk qbinom](figure/qbinom.png) 
+
+Notice that because the binomial deals with discrete outcomes, there are a range of cummulative probabilities associated with each number outcomes (i.e., it is a jagged curve).
+
+
+These four functions exist for each of the distributions R has built in: e.g., for the normal distribution they are `rnorm()`, `pnorm()`, `dnorm()`,and `qnorm()`. Each distribution has its own set of parameters as appropriate. For example, `pnorm(x, mean, sd)`. Use `?rnorm` for more information.
+
+**Test yourself**  
+Use the above commands to work out the following for a binomial distribution with 10 trials and a success probability of 0.2.
+
+* Pick 8 random values and sort them into increasing order (if you `set.seed(1001)`  before hand you should get 5, 2, 2, 2, 2, 4, 0, 0.
+
+* Calculate the probabilities of getting 3, 4, or 5 successes. (Answer: 0.2013, 0.0881, and 0.0264, respectively)
+
+* Calculate the probability of getting 5 or more successes. (Answer: 0.0328)
+
+* What tail values would you use to test against the (two‐sided) null hypothesis that p = 0.2? (Use `qbinom()` to get the answer, and use `pbinom(0:10, size = 10, prob = 0.2)` and `pbinom(0:10, size = 10, prob = 0.2, lower.tail=FALSE)` to check that your answer makes sense.)
+
+
+
+Plotting discrete stochastic distributions
+------------------------------------------
+
+Once again, it is useful to create a visual reference for these functions, particularly the pdfs (`dbinom()`), showing how parameter values alter the shape and look of the distributions. We can use the `stat_function` approach we used in the previous lab to plot discrete distributions. We need only specify "`n`," the number of points to evaluate the function along. (Think about why that is.)
+
+
+```r
+qplot(x = 0:15, n = length(x), stat = "function", fun = dbinom, args = list(size = 15, 
+    prob = 0.5), xlab = "successes", ylab = "probability", main = "probability = 0.5")
+```
+
+![plot of chunk dbinom.stat_function](figure/dbinom.stat_function.png) 
+
+
+Or we can generate the data in a data frame, and then plot it. We will take this approach because a) it is  worth learning how to do so and b) it make creating a faceted or overlayed plot much simpler. So let's see how to generate the probabilities of success (pdfs) for probability of success = 0.1, 0.3, and 0.5 with 5, 15, and 50 trials. We will make use of the `expand.grid()` function, which is designed for this very purpose. It creates a data frame with all combinations of each vector we give it.
+
+
+```r
+
+df.5 <- expand.grid(x = c(0:5), trials = 5, prob = c(0.1, 0.3, 0.5))
+df.5  # see how it is structured?
+```
+
+```
+##    x trials prob
+## 1  0      5  0.1
+## 2  1      5  0.1
+## 3  2      5  0.1
+## 4  3      5  0.1
+## 5  4      5  0.1
+## 6  5      5  0.1
+## 7  0      5  0.3
+## 8  1      5  0.3
+## 9  2      5  0.3
+## 10 3      5  0.3
+## 11 4      5  0.3
+## 12 5      5  0.3
+## 13 0      5  0.5
+## 14 1      5  0.5
+## 15 2      5  0.5
+## 16 3      5  0.5
+## 17 4      5  0.5
+## 18 5      5  0.5
+```
+
+See how this works? OK. So we've created one data frame for five trials. Now let's create them for 15 and 50 trials and then combine them all together.
+
+
+```r
+df.15 <- expand.grid(x = c(0:15), trials = 15, prob = c(0.1, 0.3, 0.5))
+df.50 <- expand.grid(x = c(0:50), trials = 50, prob = c(0.1, 0.3, 0.5))
+# Now, to combine them all
+df <- rbind(df.5, df.15, df.50)
+```
+
+
+Of course we could have done this in a single command:
+
+```r
+df <- rbind(expand.grid(x = c(0:5), trials = 5, prob = c(0.1, 0.3, 0.5)), expand.grid(x = c(0:15), 
+    trials = 15, prob = c(0.1, 0.3, 0.5)), expand.grid(x = c(0:50), trials = 50, 
+    prob = c(0.1, 0.3, 0.5)))
+```
+
+
+Anyway, we now have a data frame, `df`, with every combination of `x` and `prob`, along with labels for the number of `trials`. We still need to calculate the y-values, the probability of each outcome (`x` success) given the probability of success (`prob`), but this is pretty straightforward. We simply need to supply the right values of size and prob t the `dbinom()` function:
+
+```r
+df$y <- with(df, dbinom(x, size = trials, prob = prob))
+```
+
+
+It is then simple to plot this with different facets for each combination of parameters (9 facets, right?).
+
+
+```r
+
+ggplot(data = df, aes(x = x, y = y, ymax = y, ymin = 0)) + geom_point() + geom_linerange() + 
+    facet_grid(facets = prob ~ trials) + labs(x = "Number of successes", y = "Probability ")
+```
+
+![plot of chunk plot.dbinom.facets](figure/plot.dbinom.facets.png) 
+
+
+But wait! We have the same x-limits on each column, even though the maximum number of successes varies. We can let the x-axis be "free" to allow different limits and create a prettier, more honest figure.
+
+
+```r
+
+ggplot(data = df, aes(x = x, y = y, ymax = y, ymin = 0)) + geom_point() + geom_linerange() + 
+    facet_grid(facets = prob ~ trials, scales = "free_x") + labs(x = "Number of successes", 
+    y = "Probability ")
+```
+
+![plot of chunk plot.dbinom.facets.xfree](figure/plot.dbinom.facets.xfree.png) 
+
+
+We could also allow the y-axis to be free with `scales="free_xy"` or `scales="free_y"`.
+
+
+Homework: More functions to explore
+------------------------------------
+
+Using the same basic tools, you should play with and create similar visual guides for the several other stochastic distributions. These include the other discrete distributions:
+
+Distribution  | R function
+------------- | -------------
+Poisson  | `dpois(x, lambda)`
+negative binomial  | `dnbinom(x, size, prob, mu)`
+
+And the continuous distributions:
+
+Distribution  | R function
+------------- | -------------
+normal  | `dnorm(x, mean, sd)`
+log normal  | `dlnorm(x, meanlog, sdlog)`
+Gamma  | `dgamma(x, shape, rate, scale)` # scale = 1/rate
+beta  | `dbeta(x, shape1, shape2)`
+
+
+
+
+
+
+
