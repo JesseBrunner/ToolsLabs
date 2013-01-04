@@ -15,14 +15,20 @@ Importing data
 -----------------------------
 Let’s start with the Reed frog data from Vonesh and Bolker. You can find the comma- delimited files online at:
 
-Download these files to a location you can find them, idealy the same folder as your project. Reading them in is easy if you know the location and format of the file:
+http://bio572.wikispaces.com/file/view/ReedfrogFuncresp.csv/395842850/ReedfrogFuncresp.csv   
+
+http://bio572.wikispaces.com/file/view/ReedfrogPred.csv/395842908/ReedfrogPred.csv   
+
+http://bio572.wikispaces.com/file/view/ReedfrogSizepred.csv/395842996/ReedfrogSizepred.csv
+
+Or you can find them on the lab wiki. 
+
+Download these files to a location you can find them, ideally the same folder as your project. Reading them in is easy if you know the location and format of the file:
 ```{r loadingdata}
 ReedfrogFuncresp <- read.csv("ReedfrogFuncresp.csv", header = T)
 ReedfrogPred <- read.csv("ReedfrogPred.csv", header = T)
 ReedfrogSizepred <- read.csv("ReedfrogSizepred.csv", header = T)
 ```
-****MAKE SURE YOU POST FILES & LINK HERE ****
-
 
 The `header = T` just tells R that the first line is the header row, where you keep all of the names of the variables. This is important because if there are _any_ characters in a column such as a the name of the variable or even a space after a number (a space is a character), then R treats the whole column as if it were characters and converts it into a factor.  
 Note, too, that if you have your data stored somewhere else, you'll need to specify the full path of the file. Alternatively in RStudio you can use the "Import Dataset" button in the workspace tab, but that's cheating!  
