@@ -1,5 +1,6 @@
 Deterministic functions: EMD chapter 3
 ========================================================
+_Adapted from a lab by Jacqui Frair & John Stella (2011), which was adapted from one by Jesse Brunner (2009) with additional metrials from Ben Bolker (2005)._
 
 Our goals in this lab are to: 
 
@@ -49,7 +50,7 @@ qplot(x,y, geom = "line")
 
 It works! Whoo hoo! Your first function! 
 
-Now, we can make two important changes. First, we can provide default, but overrideable values to the arguments of a function. This is good practice because a) it lets you specify _just_ the thing(s) you want to change and b) there are built in "reasonable" values. It’s good to get in the habit.
+Now, we can make two important changes. First, we can provide default, but override-able values to the arguments of a function. This is good practice because a) it lets you specify _just_ the thing(s) you want to change and b) there are built in "reasonable" values. It’s good to get in the habit.
 
 ```{r NegExp.4, fig.width = 5, fig.height = 4}
 NegExp <- function(x, a = 1, b = 1) {a*exp(-b*x)}
@@ -84,7 +85,7 @@ Or use named functions, like our `NegExp()` function (or anything else built int
 qplot(x=c(0,10), stat="function", fun=NegExp, geom="line")
 ```
 
-If we want to plot more than one curve on the same axes, we need to use the `ggplot()` version of things, rather than `qplot()`. We are assigning color to different character strings in the `aes()` part, so that the function knows to create entries in a legend for each with the appropriate colors. We then have to specifiy values of the colors and the breaks within the `scale_colour_manual()` function. Note that the names are assigned alphabeticaly, so even though "`a=0.5, b=1`" is the last entry, it gets the first color listed (here, darkgreen).
+If we want to plot more than one curve on the same axes, we need to use the `ggplot()` version of things, rather than `qplot()`. We are assigning color to different character strings in the `aes()` part, so that the function knows to create entries in a legend for each with the appropriate colors. We then have to specify values of the colors and the breaks within the `scale_colour_manual()` function. Note that the names are assigned alphabetical, so even though "`a=0.5, b=1`" is the last entry, it gets the first color listed (here, darkgreen).
 
 ```{r guide.NegExp}
 NE <- ggplot(data.frame(x=c(0,10)), aes(x)) +   
@@ -103,10 +104,10 @@ I think that this sort of figure is a handy reference. You may want to turn this
 ggsave(NE, file="NegativeExponential.pdf", width = 8, height = 6) # width in inches, by default
 ```
 
-Homework 1: More functions to explore
+More functions to explore
 -------------------------
 
-You should try to at least understand the behavior of, if not create a similar reference pdf of the following deterministic functions. The approach is the same. Try to code them yourself. If you have trouble with the math, see below.
+You should try to at least understand the behavior of, if not create a similar reference pdf of the following deterministic functions. See where they saturate, where the half-maximum shows up, where they wiggle, etc. The approach is the same. Try to code them yourself. If you have trouble with the math, see below.
 
 **Hyperbolic**  
 $$
@@ -160,12 +161,51 @@ $$
 
 These are for your own benefit, so there is no need to send me anything unless you have questions or produce something really cool.
    
+
+ifelse() for Piece-wise Functions 
+--------------------------------
+
+The `ifelse()` command in R is useful for constructing piece-wise functions.  Its basic syntax is `ifelse(condition, value_if_true, value_if_false)`, where `condition` is a logical vector (e.g., `x > 0`), `value_if_true` is a vector of alternatives to use if condition is `TRUE`, and `value_if_false` is a vector of alternatives to use if condition is `FALSE`.  If you specify just one value, it will be expanded (recycled in R jargon) to be the right length.  A simple example:
+```{r ifelse.example}
+x <- c(-25, -16, -9, -4, -1, 0, 1, 4, 9, 16, 25)
+ifelse(x < 0, 0, sqrt(x))
+```
+
+These commands produce a warning message, but it’s OK to ignore it since you know you’ve taken care of the problem.  (If you said `sqrt(ifelse(x < 0, 0, x))` instead you wouldn’t get a warning. Why not? Do you think this would be a better way to formulate)
+
+Here are some examples of using `ifelse()` to generate 
+
+1. a simple threshold   
+2. a Holling type I or “hockey stick”   
+3. a more complicated piece-wise model that grows exponentially and then decreases linearly   
+4. a double-threshold model   
+
+```{r ifelse.plots}
+
+ggplot(data.frame(x=c(0,5)), aes(x)) +   
+stat_function(fun=function(x) ifelse(x < 2, 1/2, 2), geom="line", aes(colour="ifelse(x < 2, 1/2, 2)")) +   
+stat_function(fun=function(x) ifelse(x < 2, 2 * x, 4), geom="line", aes(colour="ifelse(x < 2, 2 * x, 4)")) +   
+stat_function(fun=function(x) ifelse(x < 2, exp(x), 7*exp(-(x-2)/4)), geom="line", aes(colour="ifelse(x < 2, exp(x), 7*exp(-(x-2)/4))")) +   
+stat_function(fun=function(x) ifelse(x < 2, 1, ifelse(x < 4, 3, 5)), geom="line", aes(colour="ifelse(x < 2, 1, ifelse(x < 4, 3, 5))")) +   
+scale_colour_manual("Piecewise model", values=c("violet", "blue","darkblue","lightblue"), breaks=c("ifelse(x < 2, 1/2, 2)", "ifelse(x < 2, 2 * x, 4)", "ifelse(x < 2, exp(x), 7*exp(-(x-2)/4))", "ifelse(x < 2, 1, ifelse(x < 4, 3, 5))")) + theme_bw() +   
+	theme(legend.position=c(0,1), legend.justification=c(0,1), legend.background = element_blank())
+
+# Notice that last call to theme(). 
+# I'm specifying the position and justification to move
+# the legend position to the upper left of the graph 
+# so that it doesn't squish the graph itself. 
+# The part about the background is to prevent the  
+# legend's white background from covering the lines.
+# element_blank() is way to "delete" an element
+```
+
+The double-threshold example (nested `ifelse()` commands) probably needs more explanation.   In words, this command would read “if x is less than 2, set y to 1; otherwise (where x ≥ 2), if x is less than 4 (i.e., 2 ≤ x < 4), set y to 3; otherwise (where x ≥ 4), set y to 5”.        
+
    
-   
-Homework 2: Which curve?
+Homework: Which curve?
 -------------------------
 
-1. On page 96 in EMD, Bolker states that the logistic is popular because it is a simple sigmoid function, but then indicates that its "rational analogue," the Holling Type III functional response is also a simple sigmoid function. So can you get a Holling type III curve to look like a logistic or vice versa? (Say, from 0 to 10.) If so, under what parameters?
+1. On page 96 in EMD, Bolker states that the logistic is popular because it is a simple sigmoid function, but then indicates that its "rational analogue," the Holling Type III functional response is also a simple sigmoid function. Does that mean they are interchangeable? Can you get a Holling type III curve to look like a logistic or vice versa? (Say, from 0 to 10.) If so, under what parameters?
 
 2. What about the hyperbolic and the negative exponential?
 
@@ -191,6 +231,13 @@ Monomolecular <- function(x, a = 2, b = 3) { a*(1 - exp(-b*x) ) }
 Ricker <- function(x, a = 2, b = 3) { a*x * exp(-b*x) }  
 Logistic <- function(x, a = 0, b = 1) { exp(a+b*x) / (1 + exp(a+b*x) ) }  
 ```
+
+
+
+
+
+
+
 
 ```{r guide.Hyperbolic, echo=FALSE, eval=FALSE}
 

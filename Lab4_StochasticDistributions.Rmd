@@ -13,7 +13,7 @@ Distribution Functions
 -----------------------
 R knows about lots of probability distributions. For each, it can generate random numbers drawn from the distribution ('deviates'); compute the cumulative distribution function and the probability distribution function; and compute the quantile function, which gives the x value such that $\int_0^x \! P(x) \, \mathrm{d} x$ (area under the curve from $0$ to $x$) is a specified value, such as 0.95. (Think about "tail areas" from standard statistics.)
 
-The figure below shows for an arbitrary distribution the R commands showing the density function (`ddist()`), cumulative distribution function (`pdist()`), quantile function (`qdist()`), and random‐deviate function (`rdist()`) where "`dist`" is the name of the distibutions (e.g., `binom`, `norm`, `pois`, `chi`, etc.). 
+The figure below shows for an arbitrary distribution the R commands showing the density function (`ddist()`), cumulative distribution function (`pdist()`), quantile function (`qdist()`), and random‐deviate function (`rdist()`) where "`dist`" is the name of the distributions (e.g., `binom`, `norm`, `pois`, `chi`, etc.). 
 
 ```{r dgamma.dist.example, fig.width = 15, fig.height=5, echo=FALSE}
 sh = 4 # shape paramter of gamma
@@ -115,16 +115,16 @@ sum(dbinom(x=0:2, size = 15, prob = 0.15)) # We can get the same result by summi
 qplot(x, y = pbinom(q = x, size = 15, prob = 0.15), ylim = c(0,1), xlab = "number of successes", ylab = "cummulative probability")
 qplot(x, ymax = pbinom(q = x, size = 15, prob = 0.15), ymin = 0, geom="linerange", ylim = c(0,1), xlab = "number of successes", ylab = "cummulative probability")
 ```
-These plots then show the cummulative probability of getting $x$ or fewer successes. See that they quickly converge on 1.
+These plots then show the cumulative probability of getting $x$ or fewer successes. See that they quickly converge on 1.
 
-Finally, `qbinom(p, size, prob)` gives the quantile function, where `p` is the proportion of the area under the pdf, or identically, the value of the cdf you want to evaluate. The quantile function returns the value of $x$ associated with that cummulative probability, i.e., the value of $x$ such that $P(x ≤ p) = q$. (Note that the quantile function $Q$ is the inverse of the cumulative distribution function $C$: if $Q(p) = q$ then $C(q) = p$.)
+Finally, `qbinom(p, size, prob)` gives the quantile function, where `p` is the proportion of the area under the pdf, or identically, the value of the cdf you want to evaluate. The quantile function returns the value of $x$ associated with that cumulative probability, i.e., the value of $x$ such that $P(x ≤ p) = q$. (Note that the quantile function $Q$ is the inverse of the cumulative distribution function $C$: if $Q(p) = q$ then $C(q) = p$.)
 
 ```{r qbinom, fig.width=5, fig.height=4}
 qbinom(p = 0.95, size = 15, prob = 0.15) # There is a 95% probability that in 15 trials, each with 0.15 chance of success, there will be this many or fewer successe
 
 qplot(x=c(0,1), stat="function", fun = qbinom, args = list(size = 15, prob = 0.15), geom = "step", xlab = "quantile (or proportion of area under pdf)", ylab = "number of successes")
 ```
-Notice that because the binomial deals with discrete outcomes, there are a range of cummulative probabilities associated with each number outcomes (i.e., it is a jagged curve).
+Notice that because the binomial deals with discrete outcomes, there are a range of cumulative probabilities associated with each number outcomes (i.e., it is a jagged curve).
 
 
 These four functions exist for each of the distributions R has built in: e.g., for the normal distribution they are `rnorm()`, `pnorm()`, `dnorm()`,and `qnorm()`. Each distribution has its own set of parameters as appropriate. For example, `pnorm(x, mean, sd)`. Use `?rnorm` for more information.

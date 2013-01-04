@@ -7,9 +7,9 @@ Our goals in this lab are to:
 2. learn to inspect and summarize data
 3. learn to explore data with plots
 
-We will use the several datasets used in Ben Bolker's book, Ecological Models and Data in R (aka, EMD) and create, more or less, the same figures he presents, _with one important exeption_: We will be using the functions in the ggplot2 package. (You can, if you want, see how Ben makes these figures in base R and in ggplot2 here: http://www.math.mcmaster.ca/~bolker/classes/s756/labs/vislab.html)
+We will use the several data sets used in Ben Bolker's book, Ecological Models and Data in R (aka, EMD) and create, more or less, the same figures he presents, _with one important exeption_: We will be using the functions in the ggplot2 package. (You can, if you want, see how Ben makes these figures in base R and in ggplot2 here: http://www.math.mcmaster.ca/~bolker/classes/s756/labs/vislab.html)
 
-There are many good functions for plotting data in R. Unfortunately, they all end up being a bit limited under many circumstances, they often require different syntax or formulations, and often they make what should be very simple, rather difficult. I think the [ggplot2](http://ggplot2.org/) does away with many of these issues, most of the time. (Although to be honest, sometimes it makes fairly simple things incredibly frustrating to accomplish with its cryptic arguements... but we'll cross that bridge as we go.) The primary advantages of using it in this class are 1) that it is really nice for exploratory plotting and 2) that the figures are pretty much publication ready with little added work. Also, it seems to have a growing following, which means better and better documentation (e.g., http://wiki.stdout.org/rcookbook/Graphs/). But I digress. On with the show!
+There are many good functions for plotting data in R. Unfortunately, they all end up being a bit limited under many circumstances, they often require different syntax or formulations, and often they make what should be very simple, rather difficult. I think the [ggplot2](http://ggplot2.org/) does away with many of these issues, most of the time. (Although to be honest, sometimes it makes fairly simple things incredibly frustrating to accomplish with its cryptic arguments... but we'll cross that bridge as we go.) The primary advantages of using it in this class are 1) that it is really nice for exploratory plotting and 2) that the figures are pretty much publication ready with little added work. Also, it seems to have a growing following, which means better and better documentation (e.g., http://wiki.stdout.org/rcookbook/Graphs/). But I digress. On with the show!
 
 Importing data
 -----------------------------
@@ -121,7 +121,7 @@ qplot(x = Initial, y = Killed, data = ReedfrogFuncresp, xlab = "Initial number o
 
 Plotting the data: mapping sample size onto symbol area
 -----------------
-Let us switch datasets, to the experiment where predation rates were measured as a function of the tadpole's body length (TBL). Again, this is simple:
+Let us switch data sets, to the experiment where predation rates were measured as a function of the tadpole's body length (TBL). Again, this is simple:
 ```{r sizepred, fig.height=4, fig.width=6}
 qplot(x=TBL,y=Kill, data = ReedfrogSizepred)
 ```
@@ -141,9 +141,9 @@ qplot(x=TBL,y=Kill, data = ReedfrogSizepred, alpha = I(1/3), size = I(2))
 Well, this works better for some things than others. _Why the_ `I()`_? This tells ggplot2 that are not adding a new "scale" and so not to include a legend. Try it without this wrapper function and see what happens!_
 
 *3) Make the size (=area) of the points proportional to the number of observations.*  
-We can, in fact, do this multiple ways. While we can use some built in summary statistic functions in the ggplot2 package (see below for a partial solution), it is hard to get the geom right (i.e., I cannot make the mean values connected by lines... no idea why). This is often the case, and so while there is the fancy way, I would recommend just keeping it simple and creating a new data set.. could summarize our data by common values of "TBL"" and "Kill"" using the `table()` or `tapply()` functions, essentially creating a new dataframe to plot. 
+We can, in fact, do this multiple ways. While we can use some built in summary statistic functions in the ggplot2 package (see below for a partial solution), it is hard to get the geom right (i.e., I cannot make the mean values connected by lines... no idea why). This is often the case, and so while there is the fancy way, I would recommend just keeping it simple and creating a new data set.. could summarize our data by common values of "TBL"" and "Kill"" using the `table()` or `tapply()` functions, essentially creating a new data frame to plot. 
 
-First let's use `table()` to count how many observations we have at each combination of `TBL` and `Kill`. Note that we turn this into a dataframe. `ggplot2` doesn't work well with matrices, which are the default output of `table()`.
+First let's use `table()` to count how many observations we have at each combination of `TBL` and `Kill`. Note that we turn this into a data frame. `ggplot2` doesn't work well with matrices, which are the default output of `table()`.
 ```{r sizepred.table, fig.height=4, fig.width=6}
 rfsp <- with(ReedfrogSizepred, as.data.frame(table(TBL, Kill)))
 str(rfsp)
@@ -152,7 +152,7 @@ rfsp$TBL <- as.numeric(as.character(rfsp$TBL))
 str(rfsp)
 ```
 You will see that the `as.data.frame()` function has used row names to create the TBL and Kill columns, but because they were text, they are automagically converted into factors. This is the way to turn them back into numbers. (This is common; remember this)  
-Also notice that there are a whole bunch of TBL by Kill combinations with a frequency of zero We don't want to plot those, so let's subset our dataframe to exclude those. We can then plot these 10 observations using `Freq` to determine the size or area of the points.
+Also notice that there are a whole bunch of TBL by Kill combinations with a frequency of zero We don't want to plot those, so let's subset our data frame to exclude those. We can then plot these 10 observations using `Freq` to determine the size or area of the points.
 ```{r sizepred.subset, fig.height=4, fig.width=6}
 rfsp <- subset(rfsp, Freq != 0)
 qplot(x = TBL, y = Kill, size = Freq, data = rfsp) + scale_size_area()
@@ -165,7 +165,7 @@ rfsp.ave <- with(ReedfrogSizepred, data.frame(Kill = tapply(Kill, TBL, mean)) )
 rfsp.ave$TBL <- as.numeric(row.names(rfsp.ave))
 ```
 
-Since this is a separate dataframe, we'll need to tell `ggplot2` to use the `rfsp.ave` dataframe in the `geom_line()` function. We also need to specify what the size is because size also affects line widths.
+Since this is a separate data frame, we'll need to tell `ggplot2` to use the `rfsp.ave` data frame in the `geom_line()` function. We also need to specify what the size is because size also affects line widths.
 ```{r sizepred.line, fig.height=4, fig.width=6}
 qplot(x = TBL, y = Kill, size = Freq, data = rfsp) + scale_size_area() + geom_line(data = rfsp.ave, size = I(1/2) )
 
@@ -234,7 +234,7 @@ All of basic documentation of the ggplot2 package can be found here http://docs.
 
 Homework
 -----------------
-Using a dataset of your own (or perhaps your advisor's, or if you cannot find one, ask me) create one publication-quality plot showing the most important feature(s) of your data. Include a 1-2 sentence caption as you would in a manuscript. Please email me the pdf and caption.
+Using a data set of your own (or perhaps your advisor's, or if you cannot find one, ask me) create one publication-quality plot showing the most important feature(s) of your data. Include a 1-2 sentence caption as you would in a manuscript. Please email me the pdf and caption.
 
 
 
