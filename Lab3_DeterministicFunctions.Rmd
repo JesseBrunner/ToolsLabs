@@ -71,6 +71,18 @@ NegExp <- function(x, a = 1, b = 1) {
 ```
 And there you go; you're first fully developed function in R!
 
+_________
+### A few notes on functions:
+
+* Functions can have 0, 1, 2, or many inputs in the parentheses. These may be any type of object or data such as character strings, TRUE/FALSE, vectors of numbers, matrices, data frames, lists.
+* Functions can only return __1__ things, although it can be complex (e.g., an object, data frame, matrix). It is good practice to make the last statment of your function be a `return()`
+	* While a function can plot or print things out, the returned object/data is the only thing that can be assigned to a variable or worked with afterwards
+* You may create new variables within a function (e.g., `y` in the `NegExp()` function above) but that variable exists only within the function. This is a _good_ thing. Imagine if you called a function that had an interval variable called `y` that _overwrote_ the variable `y` you had in your workspace! It would be dangerous working with unknown functions! This way you don't need to pay attention to the internal workings of any given function.
+	* It is possible to have a function create or change a "global" variable by using the double-arrow assignment symbol  "`<<-`""  instead of the normal  "`<-`"" . Beware.
+	
+_________
+
+
 Plotting curves with `stat_function()`
 --------------------------------------
 Instead of generating a vector of x-values, calculating y-values, and then plotting them against each other, we can use the built‐in `stat_function()` of the ggplot2 package. It is designed for just this purpose.

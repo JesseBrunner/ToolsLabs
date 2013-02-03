@@ -96,23 +96,34 @@ qplot(successes, xlim = c(0,15))
 
 `dbinom(x,size,p)` gives the value of the probability distribution function (pdf) for any given value of $x$.  Since the binomial is discrete, $x$ has to be an integer, and the pdf is just the probability of getting that many successes; if you try dbinom with a non-‐integer x, you’ll get a zero and a warning. (Note: For a continuous distribution the analog is the probability _density_ function, which calculates the probability density within some range $[a, b]$).
 
-```{r dbinom, fig.width=5, fig.height=4}
+```{r}
+# This is the probability of exactly 2 successes out of 15 trials, with a 15% chance of sucess on each trial 
+dbinom(x = 2, size = 15, prob = 0.15) 
+```
 
-dbinom(x = 2, size = 15, prob = 0.15) # This is the probability of exactly 2 successes out of 15 trials, with a 15% chance of sucess on each trial 
+A plot illustrates the general pattern of what the density function does.
+```{r dbinom, fig.width=5, fig.height=4}
 x <- 0:15
-qplot(x, y = dbinom(x, size = 15, prob = 0.15), xlab = "number of successes", ylab = "probability") # default geom = "point", or alternatively
-qplot(x, ymax=dbinom(x, size = 15, prob = 0.15), ymin = 0, geom="linerange", , xlab = "successes", ylab = "cummulative probability")
+qplot(x, y = dbinom(x, size = 15, prob = 0.15), xlab = "number of successes", ylab = "probability") # default geom = "point"
+# Or alternatively
+qplot(x, ymax=dbinom(x, size = 15, prob = 0.15), ymin = 0, geom="linerange", , xlab = "number of successes", ylab = "probability")
 ```
 These plots show the probability of getting $x$ successes given 15 trials and a probability of 0.15. Notice that they sum to 1.
 
 
 `pbinom(q, size, p)` gives the value of the _cumulative_ distribution function (cdf) at `q`. That is, it gives the probability of getting `q` or fewer successes. (This should sound sort of familiar. It is close to the definition of the p-value, only in that case we are interested in the probability of `q` _or more_ successes, which is generally `1 - pbinom()`.) For example:
 
-```{r pbinom, fig.width=5, fig.height=4}
-pbinom(q = 2, size = 15, prob = 0.15) # The probability of get 2 or fewer successes (i.e., 0, 1, or 2)
-sum(dbinom(x=0:2, size = 15, prob = 0.15)) # We can get the same result by summing up the probabilities of getting 0, 1, and 2 successes
+```{r}
+# The probability of get 2 or fewer successes (i.e., 0, 1, or 2)
+pbinom(q = 2, size = 15, prob = 0.15) 
+# We can get the same result by summing up the probabilities of getting 0, 1, and 2 successes
+sum(dbinom(x=0:2, size = 15, prob = 0.15)) 
+```
 
+A plot can illsutrate what cummualative probability distribution looks like.
+```{r pbinom, fig.width=5, fig.height=4}
 qplot(x, y = pbinom(q = x, size = 15, prob = 0.15), ylim = c(0,1), xlab = "number of successes", ylab = "cummulative probability")
+# Or alternatively, with vertical lines, like a histogram
 qplot(x, ymax = pbinom(q = x, size = 15, prob = 0.15), ymin = 0, geom="linerange", ylim = c(0,1), xlab = "number of successes", ylab = "cummulative probability")
 ```
 These plots then show the cumulative probability of getting $x$ or fewer successes. See that they quickly converge on 1.
@@ -129,6 +140,7 @@ Notice that because the binomial deals with discrete outcomes, there are a range
 
 These four functions exist for each of the distributions R has built in: e.g., for the normal distribution they are `rnorm()`, `pnorm()`, `dnorm()`,and `qnorm()`. Each distribution has its own set of parameters as appropriate. For example, `pnorm(x, mean, sd)`. Use `?rnorm` for more information.
 
+---------------
 **Test yourself**  
 Use the above commands to work out the following for a binomial distribution with 10 trials and a success probability of 0.2.
 
@@ -140,7 +152,7 @@ Use the above commands to work out the following for a binomial distribution wit
 
 * What tail values would you use to test against the (two‐sided) null hypothesis that p = 0.2? (Use `qbinom()` to get the answer, and use `pbinom(0:10, size = 10, prob = 0.2)` and `pbinom(0:10, size = 10, prob = 0.2, lower.tail=FALSE)` to check that your answer makes sense.)
 
-
+--------------
 
 Plotting discrete stochastic distributions
 ------------------------------------------
@@ -158,7 +170,9 @@ Or we can generate the data in a data frame, and then plot it. We will take this
 df.5 <- expand.grid(x = c(0:5), trials = 5, prob = c(0.1, 0.3, 0.5))
 df.5 # see how it is structured? 
 ```
-See how this works? OK. So we've created one data frame for five trials. Now let's create them for 15 and 50 trials and then combine them all together.
+See how this works? If not, try futzing with the function until you do. Or ask your neighbor questions.
+
+OK. So we've created one data frame for five trials. Now let's create them for 15 and 50 trials and then combine them all together.
 
 ```{r create.df}
 df.15 <- expand.grid(x = c(0:15), trials = 15, prob = c(0.1, 0.3, 0.5))
@@ -170,8 +184,8 @@ df <- rbind(df.5, df.15, df.50)
 Of course we could have done this in a single command:
 ```{r create.df.alt}
 df <- rbind( expand.grid(x = c(0:5), trials = 5, prob = c(0.1, 0.3, 0.5)),   
-expand.grid(x = c(0:15), trials = 15, prob = c(0.1, 0.3, 0.5)),   
-expand.grid(x = c(0:50), trials = 50, prob = c(0.1, 0.3, 0.5))   
+  expand.grid(x = c(0:15), trials = 15, prob = c(0.1, 0.3, 0.5)),   
+  expand.grid(x = c(0:50), trials = 50, prob = c(0.1, 0.3, 0.5))   
 						 )
 
 ```

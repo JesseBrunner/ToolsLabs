@@ -90,7 +90,7 @@ _This way R knows to look in the ReedfrogPred dataframe for the various names (e
 
 Plotting the data: scatter plots and smoothing functions
 -----------------
-Let us start with the Reed frog functional response data (Figure XXX in EMD) as it is relatively straightforward. We just want to plot the number killed against the number of initial frogs.   
+Let us start with the Reed frog functional response data (Figure 2.8a in EMD) as it is relatively straightforward. We just want to plot the number killed against the number of initial frogs.   
 Again, we are going to use the ggplot2 package (rather than the `boxplot()` function in base R). Make sure it's attached.
 
 ```{r functionalresponse, fig.height=4, fig.width=6}
@@ -170,7 +170,7 @@ Since this is a separate data frame, we'll need to tell `ggplot2` to use the `rf
 qplot(x = TBL, y = Kill, size = Freq, data = rfsp) + scale_size_area() + geom_line(data = rfsp.ave, size = I(1/2) )
 
 ```
-And there you go. Can you add nicer x and y axis labels? What about changing the title of the legend? (See `?guide_legend` for help.)
+And there you go. Can you add nicer x and y axis labels? What about changing the title of the legend? (See `??labs` and select `ggplot2::ggtitle` for help.)
 
 
 ### Here's how to use the inbuilt `stat_sum()` function ###

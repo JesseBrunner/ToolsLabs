@@ -1,0 +1,194 @@
+Simulation and Power analysis: EMD chapter 5
+========================================================
+_Adapted from a lab by Jacqui Frair (2009)_
+
+
+Our goals in this lab are to learn to simulate data to: 
+
+1. “sharpen your intuition and test your estimation tools.” 
+2. understanding what sample size or design will give sufficient power to detect differences among treatments, populations, etc. 
+3. bracket uncertainty in a process of interest, such as by deriving bootstrapped confidence intervals around parameter estimates. 
+
+The basics: simulating data from a linear model
+---------------------------
+
+In previous labs we’ve explored deterministic functions and probability distributions. Now let’s put the two together to derive new data under a specific model. Let’s assume our ecological process of interest can be represented by a linear model with normally distributed errors (e.g., productivity as a function of nitrogen concentration over a small range). Our mathematical formula is:
+$$
+  \begin{aligned}
+  Y \sim \text{Normal}(a+bx, \sigma^2)
+  \end{aligned}
+$$
+
+which means that $Y$ is a random variable drawn from a normal distribution with mean $a + bx$ and variance $\sigma^2$. To simulate data under this model we will take two steps. First, we need to calculate the deterministic process/dynamics/outcome. To do this we must set up the values of $x$ and specify  values for the parameter $a$ and $b$:
+ 
+```{r x}
+x <- 1:20
+
+a <- 2 
+b <- 1
+```
+
+We can then calculate the deterministic part of the model:
+
+```{r ydet}
+( y_det <- a + b * x)
+```
+
+Next, to get our simulated "data" we need to add some stochastic noise to the deterministic expectations (i.e., the expected value or mean for each value of `y_det`) with the `rnorm()` function. The basic syntax is `rnorm(n, mean = 0, sd = 1)` and again, the mean is our expected value or `y_det`. 
+To generate 20 random normal deviates with the mean equal to the deterministic equation and $sigma$ = 2 we can write:
+```{r set.seed, echo=FALSE}
+set.seed(1001)
+```
+
+```{r rnorm.1}
+y <- rnorm(20, mean = y_det, sd = 2)
+```
+Note that we could achieve the same results with:
+```{r rnorm.2}
+y <- rnorm(20, mean = a + b * x, sd = 2)
+y
+```
+Just to be clear, let's see how the stochastic version of our simple model differs from the deterministic one. Plot your simulated observations as points against $x$ and then add a best-fit linear regression line to those points. Add a line for the "True" relationship (your deterministic function) to see how a function estimated from a given set of observations might deviate from the true function. 
+
+```{r rnorm.2.plot, fig.width=5, fig.height=4}
+library(ggplot2) 
+qplot(x, y, geom="point") + geom_smooth(method = "lm", color = "blue") + geom_line(aes(y=y_det))
+```
+Not bad! 
+
+(*Note*: Your values will differ from these because of the randomness of our draws from this probability distribution. We can set the initial random number the same using `set.seed(1)` or whatever number you like. This can be useful for trouble-shooting a stochastic model.)
+
+We can more formally fit a regression to our simulated data to see how whether we can recover the original, "True", parameters, or at least get close. (We’ll cover in depth how to fit the "best"" model to a given set of data in Chapter 6.)
+
+```{r lm.1}
+lm(y ~ x)
+```
+So we can see that our estimates of the paramters $a$ (=`intercept`) and $b$ (=`x`, since it's the effect of $x$ on $y$) are pretty close. But there's not much returned. We can get much more information by using the `summary()` command on the `lm` object. 
+```{r lm.2}
+summary(lm(y ~ x))
+```
+That's much more useful. We can see that the estimates of these parameters are within a standard error of the "True" values. We can construct confidence intervals more formally by remembering that the confidence intervals are  $\approx \bar{x} \pm 1.96\times\sigma$. Where does the $1.96$ come from? Remember, we want 5% in the tails of the distribution, 2.5% in each side. We can use the quantile function to tell us what values along the x-axis are associated with the 2.5% and 97.5% quantiles.
+
+```{r qnorm}
+# The 97.5th percentile 
+qnorm(1 - 0.05/2)
+# and the 2.5th percentile of the normal
+qnorm(0.05/2)
+```
+
+We can then use this information to calculate the confidence intervals on the parameters $a$ and $b$.
+```{r confint.1}
+# a
+2.251 + 1.96*1.234
+2.251 - 1.96*1.234
+
+# b
+0.989 + 1.96*0.103 
+0.989 - 1.96*0.103 
+```
+
+Or alternately, we can use the built-in `confint()` function, which does the work for us.
+```{r confint.2}
+confint( lm(y~x) )
+```
+You will notice, however, that this provides different, wider confidence intervals than what we just calculated ourselves. Why? Well, for `lm()` models, `confint()` correctly uses the critical values from the _t_ distribution. As you may well remember, the _t_ distribution converges on the standard normal (with mean = 0 and sd = 1) when the degrees of freedom is large. In our case, with df = 20 - 2, the proper confidence intervals will be a bit wider. (Try it yourself using `qt()` for the _t_ distribution and see if you can match the output from the `confint()` function.) Anyway, back to the more important point...
+
+If we were to run this process again, say 100 times, how many times would you expect simply by random chance that we’d estimate parameters different from our true model? What if you increased the variation, say to $\sigma$ = 6? Give it a shot! Here is one example:
+
+```{r lm.s6.plot, fig.width=5, fig.height=4}
+qplot(x, y = rnorm(20, mean = a + b * x, sd = 6)) + geom_smooth(se = F, linetype = 2) + geom_smooth(method = "lm") + stat_function(fun = function(x) a + b*x)
+```
+Try repeating this a bunch of times. Do  you always get the "right" answer? If you didn't know what the right answer was, would you always assume that a linear model was the best choice? Consider the different biological interpretations that could mean. Troubling isn’t it?!
+
+The basics: simulating data from a _non_-linear model
+---------------------------
+
+Let’s now simulate data using a _non-linear_ function. Assume that our ecological process of interest follows a hyperbolic function. This is a natural expression of any decreasing quantity of a limiting resource per individual (e.g., decreasing fecundity as a function of increasing population density). Assume, too, that our data have a negative binomial error structure, that is, it is overdispersed. Our model is:
+
+$$
+  \begin{aligned}
+  Y \sim \text{NegBin}(\mu = ab /(b+x), k)
+  \end{aligned}
+$$
+
+where $a$ is the intercept term (when $x$ = 0, $y = ab/b = a$), and $k$ is an overdispersion parameter. The deterministic function acts as a control on one of the parameters of the error distribution, in this case the mean ($\mu$). Note that although the negative binomial is a discrete distribution, its parameters ($\mu$) and $k$ are continuous.
+First, define your parameters:
+```{r nl.setpars}
+a <- 20
+b <- 1
+k <- 5
+```
+
+Generate a set of 50 random values of $x$ from a uniform distribution between 0 and 5:
+```{r nl.x}
+x <- runif(50, min = 0, max = 5)
+```
+
+And  calculate the deterministic mean:
+```{r nl.y_det}
+y_det <- a * b / (b + x)
+```
+
+Next, add negative binomial noise to these deterministic values by drawing y-values from the negative binomial distribution with the appropriate mean (= our deterministic expectation) and the overdispersion parameter, $k$:
+```{r nl.y}
+y <- rnbinom(50, mu = y_det, size = k)
+```
+
+Again, your values will differ from mine due to their being random draws.
+Plot your simulated data. What kind of a function would you fit to them if you didn't know the "True" underlying function? Give it a shot, and add the line to your plot.
+
+```{r nl.plot, echo=FALSE, fig.width=5, fig.height=4}
+
+hyperbolic <- function(x, a = 20, b = 1) {a*b / (b+x)}
+
+qplot(x, y) #+ stat_function(fun = hyperbolic)
+
+```
+
+
+Hint: to add the deterministic function to the plot try this:
+```{r hyperbolic}
+hyperbolic <- function(x, a = 20, b = 1) {a*b / (b+x)}
+```
+
+###Adding Complexity
+Using this same hyperbolic simulation, let’s allow different groups to have different parameters (e.g., samples drawn from two different species, populations, or even different age or sex classes within a population). We’ll keep the same overdispersion parameter for each group, but will allow the mean to vary as:
+$$
+  \begin{aligned}
+  Y \sim \text{NegBin}(\mu = a_{i}b_{i} /(_{i}b+x), k)
+  \end{aligned}
+$$
+
+where $i$ is either 1 (group 1) or 2 (group 2). 
+
+We’ll stick with 50 data points total, 25 in each group. Start by identifying a factor variable that identifies group membership:
+```{r nl.group}
+group <- factor( rep(1:2, each = 25) )
+group
+```
+
+Next, define vectors of parameters, one element per group, keeping a single value of k:
+
+```{r nl.setpars2}
+a <- c(20, 10)
+b <- c(1, 2)
+k <- 5
+```
+
+Calculate the deterministic and stochastic portions for each group:
+```{r nl.y_det2}
+y_det <- a[group]*b[group] / (b[group] + x)
+y <- rnbinom(50, mu = y_det, size = k)
+```
+
+Plot the data for your two groups along with the "True" deterministic functions:
+```{r nl.plot2, fig.width=5, fig.height=4}
+qplot(x, y, color = group) + stat_function(fun = hyperbolic, args = list(a=20, b=1), aes(color="1")) +
+	stat_function(fun = hyperbolic, args = list(a=10, b=2), aes(color="2"))
+```
+
+Power analyses
+---------------
+
+
+You now have (almost) all of the basic tools you'll need to calculate power, bias, and other useful metrics. 
