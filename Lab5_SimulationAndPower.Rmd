@@ -52,7 +52,7 @@ Just to be clear, let's see how the stochastic version of our simple model diffe
 
 ```{r rnorm.2.plot, fig.width=5, fig.height=4}
 library(ggplot2) 
-qplot(x, y, geom="point") + geom_smooth(method = "lm", color = "blue") + geom_line(aes(y=y_det))
+qplot(x, y, geom="point") + geom_smooth(method = "lm",) + geom_line(aes(y=y_det), color = "blue")
 ```
 Not bad! 
 
@@ -93,30 +93,180 @@ confint( lm(y~x) )
 ```
 You will notice, however, that this provides different, wider confidence intervals than what we just calculated ourselves. Why? Well, for `lm()` models, `confint()` correctly uses the critical values from the _t_ distribution. As you may well remember, the _t_ distribution converges on the standard normal (with mean = 0 and sd = 1) when the degrees of freedom is large. In our case, with df = 20 - 2, the proper confidence intervals will be a bit wider. (Try it yourself using `qt()` for the _t_ distribution and see if you can match the output from the `confint()` function.) Anyway, back to the more important point...
 
-If we were to run this process again, say 100 times, how many times would you expect simply by random chance that we’d estimate parameters different from our true model? What if you increased the variation, say to $\sigma$ = 6? Give it a shot! Here is one example:
+If we were to run this process again, how many times would you expect simply by random chance that we’d estimate parameters different from our true model? What if you increased the variation, say to $\sigma$ = 6? Give it a shot! Here is one example:
 
 ```{r lm.s6.plot, fig.width=5, fig.height=4}
 qplot(x, y = rnorm(20, mean = a + b * x, sd = 6)) + geom_smooth(se = F, linetype = 2) + geom_smooth(method = "lm") + stat_function(fun = function(x) a + b*x)
 ```
 Try repeating this a bunch of times. Do  you always get the "right" answer? If you didn't know what the right answer was, would you always assume that a linear model was the best choice? Consider the different biological interpretations that could mean. Troubling isn’t it?!
 
-The basics: simulating data from a _non_-linear model
+
+Power analysis of a linear model
+---------------
+
+You now have (almost) all of the basic tools you'll need to calculate power, bias, and other useful metrics. All that is left is to learn the how to do what we just did by hand hundreds of times. 
+
+We are going to stick with our simple linear regression model, not so much because we expect really interesting results, but because it is a case most people have some sense for and so we can focus the mechanics for a bit while on comfortable ground. We know intuitively that the power of our experiment will increases with sample size, with the effect size (the true difference in means), and the critical value we use (although in practice, $alpha$ is fixed at $0.05$), and decreases as the variation (i.e., noise around our data) increases. 
+
+So let's imagine that we are planning an experiment, like we simulated above, with 20 equally-spaced values of our predictor ($x$) and we want to see:
+
+1. How likely we are to correctly say that the slope is significantly different from zero (i.e., correctly reject the null hypotheses; this is the classic definition of power), and
+2. Whether we correctly recover the True value of the slope (b = 1).
+
+What this means, in practice, is that we simulate our experimental data, fit a linear model to it, and keep both the P-value (for aim 1) and estimate of the slope (for aim 2), then repeat this a bunch of times.  
+
+We will build up the function in layers. First, let's specify what parameters the function will take and what it will return. In our case, we will give it a set of x-values, an intercept, a slope, a standard deviation, and the number of simulations to run. I've given everything a default value that matches our example above. We need only supply the vector of x-values. At the end, the function will return a data frame with a colum of P-values (`pvals`) and a column with the estimates of the slope (`slopes`). Of course we need to store those values somewhere inside the function, so I create two numeric vectors of the appropriate length. 
+
+```{r est_lm_power.fxn.1, eval=FALSE}
+est_lm_power <- function(x, intercept = 2, slope = 1, sd = 5, nsim = 500){
+
+	# create two vectors to store the p-values and estimates of the slope from each simulated experiment
+	pvals <- slopes <- numeric(length = nsim)
+
+return( data.frame(pvals, slopes) )	
+	
+}
+```
+
+Next, we need our function to create the deterministic expectation and then add the appropirate amount of noise to it to create our fake data. We need only create the deterministic expectation once, but we want to create many (n = `nsim`) sets of fake data, so I put the fake data creation stuff inside a loop. 
+```{r est_lm_power.fxn.2, eval=FALSE}
+est_lm_power <- function(x, intercept = 2, slope = 1, sd = 5, nsim = 500){
+	
+	# create two vectors to store the p-values and estimates of the slope from each simulated experiment
+	pvals <- slopes <- numeric(length = nsim)
+	
+	# calculate the deterministic expectation
+	# Note that x must be provided by the user. It remains the same in each iteration
+	y_det <- intercept + slope * x
+	
+	# each of the nsim loops is a simulated experiment
+	for(i in 1:nsim){
+		
+		# create simulated data with noise determined by sd
+		y <- rnorm(n=length(x), mean = y_det, sd = sd)
+	}
+
+return( data.frame(pvals, slopes) )	
+	
+}
+```
+The `for(i in 1:nsim){}` is a loop that starts at `i=1`, runs whatever is in the curly brackets, then increments `i` to `i=2`. It repeats through `i=nsim`. It's useful to remember that the value of `i` actually changes. We will use this to index our results in the next chunk of code. (It is also worth noting that there are other control-flow structures, including `while(condition){}`, `if(condition){}`, and `switch(expression, alt1, alt2, ...)`. The [R] languague is much more efficient if you avoid these constructs, but sometimes they are just palin helpful! )
+
+The last step in our function is to fit a regession model to our fake data and extract the P-value and estimate of the slope from it. The first part just uses the `lm()` function, as we've seen. The second part uses the `coef()` function, which helpfully extracts the coefficients of the regression model, along with their standard errors, t-test values, and P-values. We simply select the row we want (that for "x") and the correct columns. If you don't understand what I'm extracting, try fitting a regression to one set of made up data and then using the `coef(summary())` function on it. 
+```{r est_lm_power.fxn}
+est_lm_power <- function(x, intercept = 2, slope = 1, sd = 5, nsim = 500){
+	
+	# create two vectors to store the p-values and estimates of the slope from each simulated experiment
+	pvals <- slopes <- numeric(length = nsim)
+	
+	# calculate the deterministic expectation
+	# Note that x must be provided by the user. It remains the same in each iteration
+	y_det <- intercept + slope * x
+	
+	# each of the nsim loops is a simulated experiment
+	for(i in 1:nsim){
+		
+		# create simulated data with noise determined by sd
+		y <- rnorm(n=length(x), mean = y_det, sd = sd)
+
+		# fit the linear regression model
+		model <- lm(y~x)
+
+		# extract the p-value for the regression slope ("x")
+		pvals[i] <- coef(summary(model))["x","Pr(>|t|)"]
+		# and the estimated slope for "x"
+		slopes[i] <- coef(summary(model))["x","Estimate"]
+	}
+
+return( data.frame(pvals, slopes) )	
+	
+}
+```
+
+So what proportion of times do we correctly rejet the null hypothesis? That is, what is the power of our experiment?
+
+```{r power.1}
+p1 <- est_lm_power(x)
+with(p1, sum(pvals < 0.05) / length(pvals))
+```
+Wow! That's pretty good! We are almost certain to correctly reject the null hypothesis, provided the underlying model and variance are accurate! What about our estimate of the slope? Do we do a good job of estimating the slope?
+
+```{r slope.1, fig.width=5, fig.height=4}
+summary(p1$slopes)
+qplot(slopes, data = p1, binwidth = 0.02)
+```
+That's not bad, either! Fifty percent of the time we are within 0.15 of the "True" value. Moreover, our mean and median are very nearly 1, which is to say that our estimate doesn't seem to be biased and even with a sample size of just 20 we have pretty good precision.  But what if we were interested in smaller slopes? How small a slope could we detect with reasonable confidence? Back to our simulations!
+
+Since we already have a function that simulates an experiment a whole bunch of times given a set of parameters (`est_lm_power()`), why don't we simply feed this function a bunch of values for the slope?
+
+```{r est_lm_power_slope}
+est_lm_power_slope <- function(x, intercept = 2, slope = seq(0,1, length = 10), sd = 5, nsim = 500){
+	
+	# set up the results data frame
+	results <- data.frame(pvals = numeric(), slopes = numeric(), true_slope = numeric())
+	
+	# loop through all of the slope values
+	for(i in 1:length(slope)){
+		# get the results from the nsim "experiments"
+		current_results <- est_lm_power(x, intercept = intercept, slope = slope[i], sd = sd, nsim = nsim)
+		#add a column to the data frame with the true slope
+		current_results$true_slope <- slope[i]
+		
+		# add the results from the current loop to the master results data frame
+		results <- rbind(results, current_results)	
+	}
+
+	return(results)
+}
+```
+You will notice that this function takes the same inputs, only `slope` is now a vector of slope values. We can thus change any of the particular values within the simulation if we wish. Since the `est_lm_power()` function returns a data frame, our function simply takes that data frame and adds it to the bottom of the growing `results` data frame.
+
+```{r power.2, fig.width=5, fig.height=4, cache=TRUE}
+p2 <- est_lm_power_slope(x, slope = seq(0,1, length = 11))
+with(p2, tapply(pvals, true_slope, FUN = function(x) sum(x < 0.05) / length(x) ) )
+
+p <- ggplot(data = p2, aes(x = true_slope, y = pvals))
+p + stat_summary(fun.y = function(y) sum(y < 0.05)/length(y), geom = c("point", "line"))
+```
+So, as we'd expect, if the true difference in slope from zero is small, we have fairly low power to detect that difference. Of course how small a difference is important is up to you to determine!  (Also, it is worth noting that even when there is _no_ difference, we observe a power > 0. Think about why that is.) But there we go, our first power analysis!
+
+********
+
+You probably won't be surprised to learn that [R] has several built in functions for calculating traditional power for common experimental designs/statistics:
+
+function             | notes
+-------------------- | -------------
+`power.t.test()`     | tests difference between means of two normal populations
+`power.prop.test()`  | tests difference in proportions
+`power.anova.test()` | tests for a balanced, one-way ANOVA
+
+But for more complicated and ecologically realistic examples (i.e., most of the time) you’ll need to find the answer through simulation.
+
+*******
+
+
+
+
+A more complicated example: simulating data from a _non_-linear model
 ---------------------------
 
-Let’s now simulate data using a _non-linear_ function. Assume that our ecological process of interest follows a hyperbolic function. This is a natural expression of any decreasing quantity of a limiting resource per individual (e.g., decreasing fecundity as a function of increasing population density). Assume, too, that our data have a negative binomial error structure, that is, it is overdispersed. Our model is:
+Let’s now simulate data using a _non-linear_ function. Most ecological processes we will encounter will be non-linear, so it is useful to get some practice with them. The basic approach is the same, though.
+
+Assume that our ecological process of interest follows a hyperbolic function. This is a natural expression of any decreasing quantity of a limiting resource per individual (e.g., decreasing fecundity as a function of increasing population density). Assume, too, that our data have a negative binomial error structure, that is, it is overdispersed. Our model is:
 
 $$
   \begin{aligned}
-  Y \sim \text{NegBin}(\mu = ab /(b+x), k)
+  Y \sim \text{NegBin}(\mu = a /(b+x), k)
   \end{aligned}
 $$
 
 where $a$ is the intercept term (when $x$ = 0, $y = ab/b = a$), and $k$ is an overdispersion parameter. The deterministic function acts as a control on one of the parameters of the error distribution, in this case the mean ($\mu$). Note that although the negative binomial is a discrete distribution, its parameters ($\mu$) and $k$ are continuous.
-First, define your parameters:
+
+To similuate data, we first need to define our parameters:
 ```{r nl.setpars}
 a <- 20
 b <- 1
-k <- 5
+k <- 5 # remember that smaller values of k mean _more_ overdispion
 ```
 
 Generate a set of 50 random values of $x$ from a uniform distribution between 0 and 5:
@@ -126,7 +276,7 @@ x <- runif(50, min = 0, max = 5)
 
 And  calculate the deterministic mean:
 ```{r nl.y_det}
-y_det <- a * b / (b + x)
+y_det <- a / (b + x)
 ```
 
 Next, add negative binomial noise to these deterministic values by drawing y-values from the negative binomial distribution with the appropriate mean (= our deterministic expectation) and the overdispersion parameter, $k$:
@@ -139,23 +289,26 @@ Plot your simulated data. What kind of a function would you fit to them if you d
 
 ```{r nl.plot, echo=FALSE, fig.width=5, fig.height=4}
 
-hyperbolic <- function(x, a = 20, b = 1) {a*b / (b+x)}
+hyperbolic <- function(x, a = 20, b = 1) {a / (b + x)}
 
 qplot(x, y) #+ stat_function(fun = hyperbolic)
 
 ```
 
 
-Hint: to add the deterministic function to the plot try this:
+Hint: to add the deterministic function to the plot first create the hyperbolic function:
 ```{r hyperbolic}
-hyperbolic <- function(x, a = 20, b = 1) {a*b / (b+x)}
+hyperbolic <- function(x, a = 20, b = 1) {a / (b + x)}
 ```
+And then use the `stat_function` command in the `ggplot2` package. You do not need to specify the x-values; it will use the ones that you already used in plotting.
+
+
 
 ###Adding Complexity
 Using this same hyperbolic simulation, let’s allow different groups to have different parameters (e.g., samples drawn from two different species, populations, or even different age or sex classes within a population). We’ll keep the same overdispersion parameter for each group, but will allow the mean to vary as:
 $$
   \begin{aligned}
-  Y \sim \text{NegBin}(\mu = a_{i}b_{i} /(_{i}b+x), k)
+  Y \sim \text{NegBin}(\mu = a_{i} /(b_{i}+x), k)
   \end{aligned}
 $$
 
@@ -177,7 +330,7 @@ k <- 5
 
 Calculate the deterministic and stochastic portions for each group:
 ```{r nl.y_det2}
-y_det <- a[group]*b[group] / (b[group] + x)
+y_det <- a[group] / (b[group] + x)
 y <- rnbinom(50, mu = y_det, size = k)
 ```
 
@@ -186,9 +339,208 @@ Plot the data for your two groups along with the "True" deterministic functions:
 qplot(x, y, color = group) + stat_function(fun = hyperbolic, args = list(a=20, b=1), aes(color="1")) +
 	stat_function(fun = hyperbolic, args = list(a=10, b=2), aes(color="2"))
 ```
+With the "True" functions plotted against the data, the two groups seem quite distinct. But what if we just had the data and didn't know what truth was? Could we recover the "True" paramters? Would we find strong evidence that there were two unique groups?
 
-Power analyses
----------------
+Once again, the basic approach is the same as with the linear model, above, but since these are non-linear and because our data are negative binomially distributed, we can no longer use simple least-squares regression methods. We are going to jump ahead a little and dabble in negative log-likelihood functions ... don’t worry if the concept of a likelihood doesn’t make sense just now because we will be spending a lot more time on it soon. Note also that Bolker uses a slightly different approach in chapter 5 than we will use, one that requires a special function in the `emdbook` package. Although our approach is less elegant than Bolker’s, it is probably easier to follow and learn from.
+
+Our objective is to fit two models to these data, one that ignores grouping structure (thus pools the data to estimate a single value for $a$ and $b$), and a second model that allows $a$ and $b$ to vary between the two groups in the data. We will then quantitiatively test which of these two models (the single pooled estimate or group-specific estimates) best fits our data. 
+
+The first thing we need to do is create a function that calculates the negative log-likelihood (NLL) for our hyperbolic model with negative binomial distributed data. This is analagous to a function that would calculate the sums of squares in a regression model. We will then use this function to see how well the model fits our simulated data, given a set of parameters.
+
+```{r hyperNLL.1}
+hyperNLL.1 <- function(pars, x, y) {
+	# unpack the specific paramters from the pars vector
+  a <- pars[1]
+  b <- pars[2]
+  k <- pars[3]
+  
+  # calculate the deterministic expectation or prediction, given these parameters
+  y_det <- a / (b + x)
+  
+  # calculate the NLL of the data (y) given the predictions and the parameter k
+	NLL <- -sum(dnbinom(y, mu = y_det, size = k, log = T))
+    
+  return(NLL)
+}
+```
+You will see that NLL is simply the negative sum of the probabilities for each of our data points, given the expected values from our deterministic model with particular parameter values and k.
+
+Next, use we will use a function called `optim()` to find the parameters estimates that best-fit our data:
+```{r hyperNLL.1.optim, warning=FALSE}
+m0 <- optim(fn = hyperNLL.1, 
+						par = c(a = 10, b = 0.5, k = 1), 
+						x = x, y = y,
+						method = "BFGS", gr = NULL)
+```
+A couple of things to note. First, you may receive warnings about `NaNs` being produced. That is OK. It is just because some parameters produce values that give an `NaN` when you calculate the NLL. Second, `par` is a vector of initial parameter estimates (seed values) from which it starts guessing new values. `BFGS` is one of a few methods for optimization. (If you are interested in learning more about the other options, type `?optim`.) 
+
+Here is what is stored in our optim output:
+```{r m0}
+m0
+```
+The `par` list is pretty obvious. The `value` is just the NLL. We don't need to worry about the `counts`, but do keep any eye on the `convergence` code. This tells you whether or not the function has converged on a reasonable answer. Strangely, it is `0` when it has reached convergence and `1` when it has not. 
+
+Now we need a function that will fit the two-group hyperbolic function to our data where `g` represents the group. 
+```{r hyperNLL.2}
+hyperNLL.2 <- function(pars, x, y, g) {
+		# unpack the specific paramters from the pars vector
+    a1 <- pars[1]
+    a2 <- pars[2]
+    b1 <- pars[3]
+    b2 <- pars[4]
+    k <- pars[5]
+
+    # calculate the deterministic expectation for each of the two groups
+    y_det <- numeric(length(x))
+    y_det[g == 1] <- a1 / (b1 + x[g == 1]) 
+    y_det[g == 2] <- a2 / (b2 + x[g == 2])
+    
+    # calculate the NLL of the data (y) given the predictions and the parameter k
+    NLL <- -sum(dnbinom(y, mu = y_det, size = k, log = T))
+ 
+    return(NLL)
+}
+```
+Now, how does this fit our data?
+```{r hyperNLL.2.optim, warning=FALSE}
+m1 <- optim(fn = hyperNLL.2, 
+						par = c(a1 = 10, a2 = 10, b1 = 0.5, b2 = 0.5, k = 1), 
+						x = x, y = y, g = group, 
+						method = "BFGS", gr = NULL)
+m1
+```
+Well, we have a difference in NLLs of `r m1$value - m0$value`, but is that alot? 
+
+We can use a likelihood-ratio test to see whether we might expect this difference in NLL by chance, if the two models were equivalent. Here is a function to do the calculations for us and, if we ask, print out the results.
+
+```{r lrt}
+LRT <- function(model1, model2, Print = FALSE) { 
+	# twice the ratio of likelihoods (=the difference between log likelihoods)   
+	# is asymptotically distributed as a chi-square
+	Diff2LL <- abs(2*model1$value - 2*model2$value)
+	
+	# degrees of freedom is the difference in the number of parameters
+	DF <- abs(length(model1$par) - length(model2$par)) 
+	
+	# calculate the p-value for our Likelihood ratio compared to the chi-square
+	Pval <- pchisq(Diff2LL, df = DF, lower.tail = F) 
+	
+	if(Print) {
+print(paste("Likelihood ratio test: A difference in deviance of", round(Diff2LL, 3), "and", DF, "degrees of freedom has a P =", round(Pval, 4)))
+}
+	
+	return(Pval)
+}
+```
+
+```{r hyperNLL.lrt}
+LRT(m0, m1, Print = TRUE)
+```
+So yes, at least for this one simulation, we clearly reject the simpler model in favor of the "True" model with group-specific parameters. Is this a common outcome? That is, do we have high power? Back to our script to make another power-estimating function!
+
+Actually, before you look at my code, see if you can make one yourself. It is similar in outline to what we did above with the linear model. We simply need to:
+
+1. Set up a vector or two to keep things we need to return (e.g., the P-value)
+2. loop through `nsim` experiments
+3. each time create the underlying data set
+		* One difference here is that each experiment involves collecting new x-values... think of having to go out and get a bunch of field data; it will change from experiment to experiment
+4. fit the two models to the data set
+5. compute a likelihood ratio test, storing the result.
+
+Give it a shot! Or at least start thinking about how you would make it work. If you get stuck, see my code. And remember, there's usually several ways to skin a statistical cat in R.
+
+```{r est_hyper_power}
+est_hyper_power <- function(n = 25, a = c(20, 10), b = c(1, 2), k = 5, nsim = 100){
+	
+	# create a vector to store the p-values and 
+	# a matrix to store parameter estimates from each simulated experiment
+	pvals <- numeric(nsim)
+	params <- matrix(, nrow = nsim, ncol = 5)
+	colnames(params) <- c("a1", "a2", "b1", "b2", "k")
+	
+	# each of the nsim loops is a simulated experiment
+	for(i in 1:nsim){
+		
+		# simulate new x-values (each simulated experiment has new x-values)
+		x <- runif(2*n, min = 0, max = 5)
+		g <- rep( c(1,2), each = n)
+		
+		# calculate the deterministic expectation for each of the two groups
+		y_det <- numeric(2*n)
+		y_det[g == 1] <- a[1] / (b[1] + x[g == 1])
+		y_det[g == 2] <- a[2] / (b[2] + x[g == 2])
+		
+		# create simulated data with the degree of overdispersion controlled by k
+		y <- rnbinom(2*n, mu = y_det, size = k)
 
 
-You now have (almost) all of the basic tools you'll need to calculate power, bias, and other useful metrics. 
+		# Now, fit the simple and group-specific models to the data
+		m0 <- optim(fn = hyperNLL.1, 
+						par = c(a = 10, b = 0.5, k = 1), # We will leave the starting values constant
+						x = x, y = y,
+						method = "BFGS", gr = NULL)
+		m1 <- optim(fn = hyperNLL.2, 
+						par = c(a1 = 10, a2 = 10, b1 = 0.5, b2 = 0.5, k = 1), 
+						x = x, y = y, g = g, 
+						method = "BFGS", gr = NULL)
+		
+		
+		# get the p-value from the likelihood ratio test
+		pvals[i] <- LRT(m0, m1)
+		# and save the parameter values
+		params[i,] <- m1$par
+	}
+
+return( data.frame(cbind(pvals, params)) )
+}
+
+```
+
+There is a fair bit going on here, so make sure you understand it all. But the question we've all be waiting for: What is our power?!
+
+```{r hyper.power.1, warning=FALSE, cache=TRUE}
+h1 <- est_hyper_power()
+
+with(h1, sum(pvals < 0.05)/length(pvals) )
+```
+That is encouraging! But what if our sample size (per group) were lower? Well, we can create a function to loop over different sample sizes, calculating power at each.
+
+```{r est_hyper_power.n}
+est_hyper_power.n <- function(n = c(5,10,15,20,25), a = c(20, 10), b = c(1, 2), k = 5, nsim = 100){
+
+	# set up the results data frame
+	results <- data.frame(pvals=numeric(), a1=numeric(), a2=numeric(), b1=numeric(), b2=numeric(), k=numeric(), n=numeric())
+	
+	# loop through all of the sample sizes
+	for(i in 1:length(n)){
+		
+		# get the results from the nsim "experiments"
+		current_results <- est_hyper_power(n = n[i], a = c(20, 10), b = c(1, 2), k = 5, nsim = 100)
+		#add a column to the data frame with the sample size
+		current_results$n <- n[i]
+		
+		# add the results from the current loop to the master results data frame
+		results <- rbind(results, current_results)	
+	}
+	return(results)
+}
+```
+
+
+Let's try it...
+```{r hyper.power.n, warning=FALSE, cache=TRUE, fig.width=5, fig.height=4}
+h2 <- est_hyper_power.n()
+	
+with(h2, tapply(pvals, n, FUN = function(x) sum(x < 0.05) / length(x) ) )
+
+hp <- ggplot(data = h2, aes(x = n, y = pvals))
+hp + stat_summary(fun.y = function(y) sum(y < 0.05)/length(y), geom = c("point", "line"))
+```
+So we seem to have pretty good power so long as our sample size per group is 15 or more. That's comforting! (or would be if this were a real experiment we cared about!)  Would you expect the same results if you re-ran this analysis? Why or why not? Also, do we recovered the "True" parameter values? How would you go about finding this out?
+
+
+Homework
+----------
+So we have seen the basics of simulation and power analyses, broadly defined, in two semi-realistic, but kind of boring examples. Your homework is to try to simulate data for an experiment or study of your own. You might choose a study you've already done or one you're thinking of doing. Be explicit about what you want to learn from the simulation and what you need to simulate across. If you get stuck, talk to your friends and collaborators fist, then ask me. While I'd like you to go all of the way through the exercise, even if you just start setting up the problem it can be helpful.
+
+
