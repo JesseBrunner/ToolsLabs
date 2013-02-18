@@ -63,11 +63,11 @@ We can more formally fit a regression to our simulated data to see how whether w
 ```{r lm.1}
 lm(y ~ x)
 ```
-So we can see that our estimates of the paramters $a$ (=`intercept`) and $b$ (=`x`, since it's the effect of $x$ on $y$) are pretty close. But there's not much returned. We can get much more information by using the `summary()` command on the `lm` object. 
+So we can see that our estimates of the parameters $a$ (=`intercept`) and $b$ (=`x`, since it's the effect of $x$ on $y$) are pretty close. But there's not much returned. We can get much more information by using the `summary()` command on the `lm` object. 
 ```{r lm.2}
 summary(lm(y ~ x))
 ```
-That's much more useful. We can see that the estimates of these parameters are within a standard error of the "True" values. We can construct confidence intervals more formally by remembering that the confidence intervals are  $\approx \bar{x} \pm 1.96\times\sigma$. Where does the $1.96$ come from? Remember, we want 5% in the tails of the distribution, 2.5% in each side. We can use the quantile function to tell us what values along the x-axis are associated with the 2.5% and 97.5% quantiles.
+That's much more useful. We can see that the estimates of these parameters are within a standard error of the "True" values. We can construct confidence intervals more formally by remembering that the confidence intervals are  $\approx \bar{x} \pm 1.96\times\sigma/\sqrt{n}$. Where does the $1.96$ come from? Remember, we want 5% in the tails of the distribution, 2.5% in each side. We can use the quantile function to tell us what values along the x-axis are associated with the 2.5% and 97.5% quantiles.
 
 ```{r qnorm}
 # The 97.5th percentile 
@@ -81,7 +81,6 @@ We can then use this information to calculate the confidence intervals on the pa
 # a
 2.251 + 1.96*1.234
 2.251 - 1.96*1.234
-
 # b
 0.989 + 1.96*0.103 
 0.989 - 1.96*0.103 
@@ -91,9 +90,9 @@ Or alternately, we can use the built-in `confint()` function, which does the wor
 ```{r confint.2}
 confint( lm(y~x) )
 ```
-You will notice, however, that this provides different, wider confidence intervals than what we just calculated ourselves. Why? Well, for `lm()` models, `confint()` correctly uses the critical values from the _t_ distribution. As you may well remember, the _t_ distribution converges on the standard normal (with mean = 0 and sd = 1) when the degrees of freedom is large. In our case, with df = 20 - 2, the proper confidence intervals will be a bit wider. (Try it yourself using `qt()` for the _t_ distribution and see if you can match the output from the `confint()` function.) Anyway, back to the more important point...
+You will notice, however, that this provides different, wider confidence intervals than what we just calculated ourselves. Why? Well, for `lm()` models, `confint()` correctly uses the critical values from the _t_-distribution. As you may well remember, the _t_-distribution converges on the standard normal (with mean = 0 and sd = 1) when the degrees of freedom is large. In our case, with df = 20 - 2, the proper confidence intervals will be a bit wider. (Try it yourself using `qt()` for the _t_-distribution and see if you can match the output from the `confint()` function.) Anyway, back to the more important point...
 
-If we were to run this process again, how many times would you expect simply by random chance that we’d estimate parameters different from our true model? What if you increased the variation, say to $\sigma$ = 6? Give it a shot! Here is one example:
+If we were to run this process again, how many times would you expect simply by random chance that we’d estimate parameters different from our true model? What if you increased the standard deviation, say to $\sigma$ = 6? Give it a shot! Here is one example:
 
 ```{r lm.s6.plot, fig.width=5, fig.height=4}
 qplot(x, y = rnorm(20, mean = a + b * x, sd = 6)) + geom_smooth(se = F, linetype = 2) + geom_smooth(method = "lm") + stat_function(fun = function(x) a + b*x)
@@ -115,7 +114,7 @@ So let's imagine that we are planning an experiment, like we simulated above, wi
 
 What this means, in practice, is that we simulate our experimental data, fit a linear model to it, and keep both the P-value (for aim 1) and estimate of the slope (for aim 2), then repeat this a bunch of times.  
 
-We will build up the function in layers. First, let's specify what parameters the function will take and what it will return. In our case, we will give it a set of x-values, an intercept, a slope, a standard deviation, and the number of simulations to run. I've given everything a default value that matches our example above. We need only supply the vector of x-values. At the end, the function will return a data frame with a colum of P-values (`pvals`) and a column with the estimates of the slope (`slopes`). Of course we need to store those values somewhere inside the function, so I create two numeric vectors of the appropriate length. 
+*We will build up the function in layers.* So what you will see first is a skeleton of the function, and then we will fill in the necessary code in several steps.  First, let's specify what parameters the function will take and what it will return. In our case, we will give it a set of x-values, an intercept, a slope, a standard deviation, and the number of simulations to run. I've given everything a default value that matches our example above. We need only supply the vector of x-values. At the end, the function will return a data frame with a column of P-values (`pvals`) and a column with the estimates of the slope (`slopes`). Of course we need to store those values somewhere inside the function, so I create two numeric vectors of the appropriate length. 
 
 ```{r est_lm_power.fxn.1, eval=FALSE}
 est_lm_power <- function(x, intercept = 2, slope = 1, sd = 5, nsim = 500){
@@ -128,7 +127,7 @@ return( data.frame(pvals, slopes) )
 }
 ```
 
-Next, we need our function to create the deterministic expectation and then add the appropirate amount of noise to it to create our fake data. We need only create the deterministic expectation once, but we want to create many (n = `nsim`) sets of fake data, so I put the fake data creation stuff inside a loop. 
+Next, we need our function to create the deterministic expectation and then add the appropriate amount of noise to it to create our fake data. We need only create the deterministic expectation once, but we want to create many (n = `nsim`) sets of fake data, so I put the fake data creation stuff inside a loop. 
 ```{r est_lm_power.fxn.2, eval=FALSE}
 est_lm_power <- function(x, intercept = 2, slope = 1, sd = 5, nsim = 500){
 	
@@ -150,9 +149,9 @@ return( data.frame(pvals, slopes) )
 	
 }
 ```
-The `for(i in 1:nsim){}` is a loop that starts at `i=1`, runs whatever is in the curly brackets, then increments `i` to `i=2`. It repeats through `i=nsim`. It's useful to remember that the value of `i` actually changes. We will use this to index our results in the next chunk of code. (It is also worth noting that there are other control-flow structures, including `while(condition){}`, `if(condition){}`, and `switch(expression, alt1, alt2, ...)`. The [R] languague is much more efficient if you avoid these constructs, but sometimes they are just palin helpful! )
+The `for(i in 1:nsim){}` is a loop that starts at `i=1`, runs whatever is in the curly brackets, then increments `i` to `i=2`, runs the stuff in the curly brackets, and on an on through `i=nsim`. It's useful to remember that the value of `i` actually changes. We will use this to index our results in the next chunk of code. (It is also worth noting that there are other control-flow structures, including `while(condition){}`, `if(condition){}`, and `switch(expression, alt1, alt2, ...)`. The [R] language is much more efficient if you avoid these constructs, but sometimes they are just plain helpful! )
 
-The last step in our function is to fit a regession model to our fake data and extract the P-value and estimate of the slope from it. The first part just uses the `lm()` function, as we've seen. The second part uses the `coef()` function, which helpfully extracts the coefficients of the regression model, along with their standard errors, t-test values, and P-values. We simply select the row we want (that for "x") and the correct columns. If you don't understand what I'm extracting, try fitting a regression to one set of made up data and then using the `coef(summary())` function on it. 
+The last step in our function is to fit a regression model to our fake data and extract the P-value and estimate of the slope from it. The first part just uses the `lm()` function, as we've seen. The second part uses the `coef()` function, which helpfully extracts the coefficients of the regression model, along with their standard errors, t-test values, and P-values. We simply select the row we want (that for "x") and the correct columns. If you don't understand what I'm extracting, try fitting a regression to one set of made up data and then using the `coef(summary())` function on it. 
 ```{r est_lm_power.fxn}
 est_lm_power <- function(x, intercept = 2, slope = 1, sd = 5, nsim = 500){
 	
@@ -183,7 +182,7 @@ return( data.frame(pvals, slopes) )
 }
 ```
 
-So what proportion of times do we correctly rejet the null hypothesis? That is, what is the power of our experiment?
+So what proportion of times do we correctly reject the null hypothesis? That is, what is the power of our experiment?
 
 ```{r power.1}
 p1 <- est_lm_power(x)
@@ -262,7 +261,7 @@ $$
 
 where $a$ is the intercept term (when $x$ = 0, $y = ab/b = a$), and $k$ is an overdispersion parameter. The deterministic function acts as a control on one of the parameters of the error distribution, in this case the mean ($\mu$). Note that although the negative binomial is a discrete distribution, its parameters ($\mu$) and $k$ are continuous.
 
-To similuate data, we first need to define our parameters:
+To simulate data, we first need to define our parameters:
 ```{r nl.setpars}
 a <- 20
 b <- 1
@@ -304,7 +303,7 @@ And then use the `stat_function` command in the `ggplot2` package. You do not ne
 
 
 
-###Adding Complexity
+### Adding Complexity
 Using this same hyperbolic simulation, let’s allow different groups to have different parameters (e.g., samples drawn from two different species, populations, or even different age or sex classes within a population). We’ll keep the same overdispersion parameter for each group, but will allow the mean to vary as:
 $$
   \begin{aligned}
@@ -320,7 +319,7 @@ group <- factor( rep(1:2, each = 25) )
 group
 ```
 
-Next, define vectors of parameters, one element per group, keeping a single value of k:
+Next, define vectors of parameters, one element per group, keeping a single value of $k$:
 
 ```{r nl.setpars2}
 a <- c(20, 10)
@@ -339,13 +338,13 @@ Plot the data for your two groups along with the "True" deterministic functions:
 qplot(x, y, color = group) + stat_function(fun = hyperbolic, args = list(a=20, b=1), aes(color="1")) +
 	stat_function(fun = hyperbolic, args = list(a=10, b=2), aes(color="2"))
 ```
-With the "True" functions plotted against the data, the two groups seem quite distinct. But what if we just had the data and didn't know what truth was? Could we recover the "True" paramters? Would we find strong evidence that there were two unique groups?
+With the "True" functions plotted against the data, the two groups seem quite distinct. But what if we just had the data and didn't know what truth was? Could we recover the "True" parameters? Would we find strong evidence that there were two unique groups?
 
 Once again, the basic approach is the same as with the linear model, above, but since these are non-linear and because our data are negative binomially distributed, we can no longer use simple least-squares regression methods. We are going to jump ahead a little and dabble in negative log-likelihood functions ... don’t worry if the concept of a likelihood doesn’t make sense just now because we will be spending a lot more time on it soon. Note also that Bolker uses a slightly different approach in chapter 5 than we will use, one that requires a special function in the `emdbook` package. Although our approach is less elegant than Bolker’s, it is probably easier to follow and learn from.
 
-Our objective is to fit two models to these data, one that ignores grouping structure (thus pools the data to estimate a single value for $a$ and $b$), and a second model that allows $a$ and $b$ to vary between the two groups in the data. We will then quantitiatively test which of these two models (the single pooled estimate or group-specific estimates) best fits our data. 
+Our objective is to fit two models to these data, one that ignores grouping structure (thus pools the data to estimate a single value for $a$ and $b$), and a second model that allows $a$ and $b$ to vary between the two groups in the data. We will then quantitatively test which of these two models (the single pooled estimate or group-specific estimates) best fits our data. 
 
-The first thing we need to do is create a function that calculates the negative log-likelihood (NLL) for our hyperbolic model with negative binomial distributed data. This is analagous to a function that would calculate the sums of squares in a regression model. We will then use this function to see how well the model fits our simulated data, given a set of parameters.
+The first thing we need to do is create a function that calculates the negative log-likelihood (NLL) for our hyperbolic model with negative binomial distributed data. This is analogous to a function that would calculate the sums of squares in a regression model. We will then use this function to see how well the model fits our simulated data, given a set of parameters.
 
 ```{r hyperNLL.1}
 hyperNLL.1 <- function(pars, x, y) {
@@ -363,7 +362,7 @@ hyperNLL.1 <- function(pars, x, y) {
   return(NLL)
 }
 ```
-You will see that NLL is simply the negative sum of the probabilities for each of our data points, given the expected values from our deterministic model with particular parameter values and k.
+You will see that NLL is simply the negative sum of the probabilities for each of our data points, given the expected values from our deterministic model with particular parameter values and $k$.
 
 Next, use we will use a function called `optim()` to find the parameters estimates that best-fit our data:
 ```{r hyperNLL.1.optim, warning=FALSE}
@@ -409,7 +408,7 @@ m1 <- optim(fn = hyperNLL.2,
 						method = "BFGS", gr = NULL)
 m1
 ```
-Well, we have a difference in NLLs of `r m1$value - m0$value`, but is that alot? 
+Well, we have a difference in NLLs of `r m1$value - m0$value`, but is that a lot? 
 
 We can use a likelihood-ratio test to see whether we might expect this difference in NLL by chance, if the two models were equivalent. Here is a function to do the calculations for us and, if we ask, print out the results.
 
@@ -442,8 +441,8 @@ Actually, before you look at my code, see if you can make one yourself. It is si
 
 1. Set up a vector or two to keep things we need to return (e.g., the P-value)
 2. loop through `nsim` experiments
-3. each time create the underlying data set
-		* One difference here is that each experiment involves collecting new x-values... think of having to go out and get a bunch of field data; it will change from experiment to experiment
+3. each time create the underlying data set   
+		(One difference here is that each experiment involves collecting new x-values... think of having to go out and get a bunch of field data; it will change from experiment to experiment.)
 4. fit the two models to the data set
 5. compute a likelihood ratio test, storing the result.
 
@@ -541,6 +540,6 @@ So we seem to have pretty good power so long as our sample size per group is 15 
 
 Homework
 ----------
-So we have seen the basics of simulation and power analyses, broadly defined, in two semi-realistic, but kind of boring examples. Your homework is to try to simulate data for an experiment or study of your own. You might choose a study you've already done or one you're thinking of doing. Be explicit about what you want to learn from the simulation and what you need to simulate across. If you get stuck, talk to your friends and collaborators fist, then ask me. While I'd like you to go all of the way through the exercise, even if you just start setting up the problem it can be helpful.
+So we have seen the basics of simulation and power analyses, broadly defined, in two semi-realistic, but kind of boring examples. Your homework is to try to simulate data for an experiment or study of your own. You might choose a study you've already done or one you're thinking of doing. Be explicit about what you want to learn from the simulation and what you need to simulate across. If you get stuck, talk to your friends and collaborators first, then ask me. While I'd like you to go all of the way through the exercise, even if you just start setting up the problem it can be helpful.
 
 

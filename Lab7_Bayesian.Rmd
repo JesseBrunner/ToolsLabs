@@ -1,0 +1,200 @@
+Baysian Analyses with WinBUGS (and some of that): EMD chapter 6
+========================================================
+
+_Modifed from a lab by Elizabeth Hunter (2011), with help from Marc Kery (2010) and Ben Bolker (2008)_
+
+In this lab we will be applying a Bayesian approach to model fitting using the same myxomatosis dataset and model that was the homework in the previous likelihood lab.  To do this, we’ll be using the program **WinBUGS** (**B**ayesian inference **U**sing the **G**ibbs **S**ampler). 
+
+It is worth noting that there are several such programs for generic Bayesian analyses. WinBUGS has now been superceded by [OpenBUGS](http://www.openbugs.info/) in most respects and is still be actively developed, whereas WinBUGS is not. These are both written for PCs, although it is possible to run them on Linux or Mac OSX using [Wine](http://www.winehq.org/). In recent years an open-source, cross-platform program called [JAGS](http://mcmc-jags.sourceforge.net/) (**J**ust **A**nother **G**ibbs **S**ampler) has been developed. The underlying approach among these three is fairly similar (so I hear), but not quite identical. There is also something called [Stan](http://mc-stan.org/) that may revolutize the Bayesian world. In short, there is a lot of development in the Bayesian world. For our purposes, though, we are going to stick with WinBUGS, primarily so we can stick with Bolker's book on this.
+
+Installing WinBUGS
+------------------
+
+### For PC users
+
+1. Download the pogram from the [WinBUGS website](http://www.mrc-bsu.cam.ac.uk/bugs/winbugs/contents.shtml) and install the program.  A word of advice: install the program within your My Documents or similar working directory. Various versions of Windows have trouble with programs writing files within c:\Program Files\.
+2. Download and install the 1.4.3 patch.  Follow the directions in that file explicitly, or else the program won’t work.
+3. Download and install the unrestricted use key.   
+
+### For Mac users
+
+You have three options:
+
+1. Use a windows emulator, like Parallels or VMWare's Fusion or use Bootcamp to boot into Windows and the follow the PC instructions. If you don't know what these are, skip to #2. Note: this can be a real pain in the ass if you have to keep switching between the PC and Mac sides of your computer. It is made a bit easier by the fact that RStudio is cross platform and looks more or less the same on both sides.  
+
+2. You can run WinBUGS using Wine. Very explicit instructions can be found [here](http://www.davideagle.org/r-2/winebugs). Note that this takes a number of steps, a bit of time copying things into the terminal, and a lot of time, like an hour or two. But once you get it all running OK, you can use WinBUGS as if it were native to the Mac.   
+
+3. You can partner up with someone on a PC and just work with them. Coding with someone else can be a good way to go about this, but some people only learn well if they do it themselves, so don't do this just because it is the easiest of the options.
+
+
+Running an analysis in the WinBUGS GUI
+--------------------------------------
+
+To familiarize ourselves with a BUGS analysis, we’ll first run the analysis through the WinBUGS Graphical User Interface.  We’ll use the same myxomatosis dataset and Ricker/Gamma model that you constructed for your homework last time. As a refresher, though, remember that the Ricker model is:
+
+$$
+  \begin{aligned}
+  f(x) & = ax \times exp(-bx)
+  \end{aligned}
+$$
+where $a$ is the initial slope and the maximum value is found at $1/b$, and the mean of the Gamma distribution is $shape / rate$.
+
+
+Open up WinBUGS and start a new model (File | New). (Note: if you are running WinBUGS via Wine, then you need to first open a terminal in XQuartz and type in:   
+```
+wine "C:\Program Files\WinBUGS14\WinBUGS14.exe"
+```
+which should open the WinBUGS program.) 
+Then type in the model code:
+```
+model {
+	for (i in 1:n) {
+		mean [i] <- a * day[i] * exp( -b * day[i] )
+		rate [i] <- shape/mean[i]
+		titer [i] ~ dgamma(shape, rate[i])
+	}
+##priors
+a ~ dgamma(0.1, 0.1)
+b ~ dgamma(0.1, 0.1)
+shape ~ dgamma(0.01, 0.01)
+}
+```
+*Model:* The syntax in WinBUGS is very similar to [R], but there are a few key differences.  Most important, assignment must always be done by the arrow (`<-`) instead of an equals sign for deterministic functions and the tilde (`~`) is used for stochastic relationships.  Second, unlike [R] WinBUGS does cannot perform an operation on a whole vector at once; we will always have to loop through the vector. Here we loop through each of the `n` observations each time calculating the mean or expected value of the titer from the Ricker model, then using this mean (and a shape parameter that we specify elsewhere) to calculate the rate parameter of the Gamma distribution, and lastly specifying that our actual data ('titer') are gamma distributed with a shape (which is constant) and rate parameter we've just defined. 
+
+*Priors:* In the model code, you must also specify your priors.  Here we are using relatively vague priors, meaning that the probability is spread out over many x-values.  The Gamma distribution is always parameterized as shape and rate in WinBUGS. (Note that many stochastic distributions in WinBUGS have somewhat odd parameterizations, like using "precision" = 1/variance ***CHECK***). To see just how these priors are shaped we can plot them in R.
+
+```{r plot.gammas, fig.width=5, fig.height=4}
+library(ggplot2)
+qplot(x = c(0,50), stat = "function", fun = dgamma, args = list(shape = 0.1, rate = 0.1))
+qplot(x = c(0,50), stat = "function", fun = dgamma, args = list(shape = 0.01, rate = 0.01))
+```
+Notice that there is still a peak at smaller values, which is reasonable given what we want a Ricker to do, but all sorts of values are also possible. If we were worried about this particular set of priors, we could (and should!) re-run the model with different types of priors.
+
+
+*Data & Initial values* You also need to specify the data and initial starting values are.  We’ll just include them in the same text file as the model, below the model specification. 
+
+```
+#Data set from grade 1 of myxo data
+list(titer = c(5.207, 5.734, 6.613, 5.997, 6.612, 6.810, 5.930, 6.501, 7.182, 7.292, 7.819, 7.489, 6.918, 6.808, 6.235, 6.916, 4.196, 7.682, 8.189, 7.707, 7.597, 7.112, 7.354, 7.158, 7.466, 7.927, 8.499), day = c(2, 2, 2, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 6, 6, 2, 9, 8, 7, 7, 8, 8, 6, 6, 6, 6), n=27)
+
+#Initial values for 3 chains
+list(a=4, b=0.2, shape=90)
+list(a=1, b=0.1, shape=50)
+list(a=8, b=0.1, shape=150)
+```
+
+Notice that we specify data as a list of vectors, first one for the `titer`, then one for `day`, and finally an entry for `n`, the number of observations we have. When running your own analyses you could type your data out by hand, or use the `dput()` function in R to create an asci version of your data, which you can then copy and paste into your WinBUGS code.
+```{r dput.example,message=FALSE}
+library(emdbook)
+data(MyxoTiter_sum)
+myxo <- subset(MyxoTiter_sum, grade == 1) 
+dput(myxo$titer)
+```
+Or, as you will see, we can run WinBUGS from within [R] and then we don't need to worry about it.
+
+Now we have a fully-specified model with the actual model and priors, data and initial values. It is a good idea to save this file (e.g., Myxo1) in case WinBUGS crashes. 
+
+In order to run the model we have to go through a series of steps, trouble-shooting along the way.
+
+1. Go to **Model | Specification**, and a box will pop up.  
+2. With your mouse, highlight the word **`model`** at the beginning of your model code and then click the button **check model**.  
+If the model is written correctly, the message `model is syntatically correct` will appear in the bottom left message bar.  
+If you get an error message, a cursor will appear in the model code where the problem is.  Fix the problem and then try to check the model again.
+3. Once your model is correct, highlight the word **`list`** at the beginning of your data list and click **load data**.  You will get the message `data loaded` in the bottom left message bar when this has occurred.
+4. Now enter the number of chains: 3.  
+This is the number of MCMC chains that will be run from different starting parameter values.  
+5. Click **compile**.
+6. Load the initial values by highlighting the word **'list'** in front of the first chain of initial values, then click **load inits**.  Do this for all 3 chains.  (The button "gen inits" will make WinBUGS generate its own initial values, but it’s usually a better idea to come up with your own).  You’ll get the message `model is initialized` in the bottom left message bar.
+
+7. Go to **Inference | Samples** and we’ll set monitors for all of the "nodes" (parameters) that we want to keep track of.  In the node box, type **"a"**, then click **set**.  That means we’ll track the process for parameter `a`.  Repeat this for parameters **"b"** and **"shape"**.  Then type an asterisk (**"\*"**) in the node box to monitor all 3 nodes.  
+8. Click **trace** and this will open a box that will allow us to watch the MCMC chains as they trace the posterior distributions.  Here we can also set the burn-in value in the **beg** box. Recall that the burn-in is the time it takes for the chains to have gotten beyond the influence of the initial values.  We want to discard the initial samples from the posterior distribution because they will be biased by the initial parameters.  For serious runs, you want the burn-in to be pretty high, maybe even up to 50% of the total samples, but here will just burn-in by 10%.  Set the burn-in value by typing 300 into the **beg** box to tell WinBUGS at what step to begin recording model output.
+
+9. Go to **Model | Update** to set the number of iterations, or draws from the posterior distribution.  Set **updates to 3000** and **refresh to 10**. (This just specifies how often the view of the MCMC chains will be refreshed.)  The number of draws required depends on the complexity of the model system, and how long you want to wait for it to run.  After the run, if the shape of the posterior distribution is not very smooth, you will probably want to set the number of iterations higher.
+
+10. Now click **update**, and off you go!  
+
+You can see the MCMC chains "searching" through parameter space.  Each iteration is a draw from the posterior distribution for the parameter.  Click on the **"history"** button in the **Sample Monitor Tool** box and you will see the complete history of the run.  You can visually check for convergence here – convergence will look like white noise and the samples will not be hitting any ceilings or floors.  Bayesians refer to this as looking for a grassy field (because green is always on top for the chains).  Now, imagine squishing all these samples together along the x-axis; that would be the posterior distribution --– the accumulation of all of these samples.  Click the **"density"** button to see the posterior distributions summarized.  Click **"stats"** to get the summary statistics for all the parameters.  The means look fairly similar to what we got in the likelihood analysis.
+
+We can also check to see whether any of the variables are correlated.  Go to **Inference | Correlations** and type the parameters **"a"** and **"b"** into the boxes.  Exclude the burn-in by entering 300 into the "beg" box, and click **"scatter"**.  The parameters $a$ and $b$ are correlated.  (What would it look like if they weren’t?)
+
+
+Running WinBUGS through R
+-------------------------
+
+Using the WinBUGS GUI can be useful when you’re first figuring out how to model your system, but it’s pretty clunky when you want to run a model repeatedly for different scenarios or systems.  And of course it does not fit our goal of being easily reproducable. Instead, we can use the `R2WinBUGS` package in [R] to run WinBUGS through [R], have WinBUGS do all of the Gibbs sampling, then keep and analyze the output in [R]. It's the best of both worlds.
+
+First, install and load the `R2WinBUGS` package.  
+
+Now we’ll specify all the parts that we did in the GUI, but code them in [R], so that we can change things more easily.  
+
+Load the myxomatosis data. The data need to have the same names as in the model file:
+
+```{r load.myxo}
+library(emdbook)
+data(MyxoTiter_sum)
+head(MyxoTiter_sum)
+myxdat <- subset(MyxoTiter_sum, grade==1)
+
+titer = myxdat$titer
+day = myxdat$day
+n = length(titer)
+```
+
+Generate our lists of starting values for the parameters:
+```{r inits.myxo}
+inits <- list(list(a=4, b=0.2, shape=90), 
+							list(a=1, b=0.1, shape=50), 
+							list(a=8, b=0.1, shape=150))
+```
+Note that we need three different sets of starting values here because we are running three different chains.  This is exactly the same as how we specified it when working through WinBUGS directly.  Recall that initial values are required, and the methods of moments is your key to coming up with reasonable values.  WinBUGS will not work if you specify unreasonable initial parameters (and it won’t necessarily tell you that is the problem).  
+  
+Now we’ll specify the model directly through R and save it to a text file, using the `sink()` function, so that WinBUGS can use it.  This model is exactly the same as the one we used before, but excludes the data and initial values.
+```{r sink.model.myxo, echo=FALSE}
+sink("myxomodel.txt")
+cat("
+model {
+	for (i in 1:n) {
+		mean [ i ] <- a*day[ i ]*exp(-b*day[ i ])
+		rate [ i ] <- shape/mean[ i ]
+		titer [ i ] ~ dgamma (shape, rate[ i ])
+	}
+##priors
+a ~ dgamma (0.1, 0.1)
+b ~ dgamma (0.1, 0.1)
+shape ~ dgamma (0.01, 0.01)
+}
+", fill=TRUE)
+sink()
+```
+
+Now we’ll run this model through WinBUGS using the `R2WinBUGS` package:
+```{r bugs.myxo, eval=FALSE}
+library(R2WinBUGS)
+myxo1.bugs <- bugs(data = list("titer", "day", "n"), 
+									 inits = inits, 
+									 parameters.to.save = c("a", "b", "shape"), 
+									 model.file = "myxomodel.txt", 
+									 n.thin = 1, n.chains = 3, n.burnin = 300, n.iter = 3000, debug = TRUE, 
+									 bugs.directory = "where your winbugs folder is")
+```
+
+```{r bugs.myxo2, echo=FALSE}
+library(R2WinBUGS)
+myxo1.bugs <- bugs(data = list("titer", "day", "n"), 
+									 inits = inits, 
+									 parameters.to.save = c("a", "b", "shape"), 
+									 model.file = "myxomodel.txt", 
+									 n.thin = 1, n.chains = 3, n.burnin = 300, n.iter = 3000)
+```
+Note that your bugs.directory statement may require the use of "\\" instead of "\" within the path name to work correctly (on a PC).  Note also that you may choose to save your bugs directory path so a variable, e.g.:
+```
+bugsdir <- "C:\\Program Files\\WinBUGS14\\"  
+```
+So that in the future you simply specify `bugs.directory = bugsdir`. Lastly, if you added the path to BUGs in your `.Renviron` file (as those of you that followed the instructions to install WinBUGS using Wine), you can leave out the `bugs.directory` bit. 
+
+Note that we specify here `debug=TRUE`, which will allow us to see the output in WinBUGS after the run is complete. Otherwise WinBUGS closes before you can see any of the innevitable messages.  Having this set to true also allows us to address problems as they arise in WinBUGS.  Importantly, once you view things in WinBUGS you need to close WinBUGS to work with the output data back in [R].  Usually you want to have `debug=TRUE` when you first start running a model (as it’s almost impossible to have it perfect the first time), and once you have it running right set `debug=FALSE` so that WinBUGS will close automatically after the run is complete. So run the model this way to trouble-shoot your code and examine the model output within WinBUGS just as we had when we ran it in previously within WinBUGS.  When complete, close WinBUGS to examine the output in R.  
+
+```{r bugs.myxo.results}
+myxo1.bugs
+```
+

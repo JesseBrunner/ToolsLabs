@@ -280,7 +280,7 @@ as.NLL.upper <- as.NLL[which.min(as.NLL):length(as.NLL)]
 as.upper <- as[which.min(as.NLL):length(as.NLL)]
 approx(as.NLL.upper, as.upper, xout = cutoff)
 ```
-So, more precisely, our 95% CI on $a$ is 0.4025 -- 0.6825! Can you repeat this for the other parameter, $h$? It would be a good exercise for you to give it a try, you could even write your own function to do the tedious bits, but if you a) already get it or b) feel like your sinking and just want to see how you might do this in "real life", see [how to do all of this using the `bbmle` package][1].
+So, more precisely, our 95% CI on $a$ is 0.4025 -- 0.6825! Can you repeat this for the other parameter, $h$? It would be a good exercise for you to give it a try, you could even write your own function to do the tedious bits, but if you a) already get it or b) feel like your sinking and just want to see how you might do this in "real life", see how to do all of this using the `bbmle` package, which I explain at the bottom of the end of this document.
 
 
 2D Likelihood surfaces for two parameters at a time
@@ -290,16 +290,6 @@ You probably would not be surprised to learn that the two parameters of our mode
 
 Basically, we want to see how the likelihood changes as we change $a$ and $h$ simultaneously. In the last lab, we made plots that had power being affected by two factors, now we’ll make plots that have likelihood being affected by two parameters.  What we’ll end up with will look something like Figure 6.7. Also, since our model only has two parameters, we no longer need to use `optim()`...there is nothing to optimize! We need only get the NLL for each combination of $a$ and $h$. If you were going to do this with a model that had other parameters, you would need to optimize the other free parameters.
 
-binomNLL2 <- function(params, N, k) {
-    # unpack the parameters from the params vector
-    a = params[1]
-    h = params[2]
-    # calculate the deterministic expectation
-    predprob = a/(1 + a * h * N)
-    # then calculate the negative log-likelihood of the data given this
-    # expectation
-    -sum(dbinom(k, prob = predprob, size = N, log = TRUE))
-}
 
 ```{r bivariate}
 # create our vectors of "a" and "h" values
@@ -322,7 +312,7 @@ for(i in 1:50){
 	}
 }
 ```
-This produces a matrix of NLL values, but we need a "long" data set with one combination of $a$, $h$, and NLL per row. So we convert it, and then label the column names.
+This produces a matrix of NLL values, but for plotting we need a "long" data set with one combination of $a$, $h$, and NLL per row. So we convert it, and then label the column names.
 ```{r reshape}
 library(reshape)
 NLL.m <- melt(NLL)
@@ -376,9 +366,9 @@ I would like you to send me a figure of your best-fit line to the myxomatosis da
 
 
 
-#### Footnote: using the `bbmle` package.
+### Footnote: using the `bbmle` package.
 
-[1]: Bolker has written a packaged called `bbmle` that has functions that can fit likelihood models for us (it calls `optim()` for us and takes care of a lot of niggly bits) and calculate profile likelihood confidence intervals. Most of the time his functions work well, but it is important to know more or less what they are doing so you can trouble shoot or, if you can't get his to work, to make your own.
+Bolker has written a packaged called `bbmle` that has functions that can fit likelihood models for us (it calls `optim()` for us and takes care of a lot of niggly bits) and calculate profile likelihood confidence intervals. Most of the time his functions work well, but it is important to know more or less what they are doing so you can trouble shoot or, if you can't get his to work, to make your own.
 
 First we need to rewrite the `binomNLL2()` function so that it takes separate parameters rather than a vector of parameters (`params`) that `optim()` required.  Otherwise our function is unchanged.
 ```{r binomNLL2.mle2}
