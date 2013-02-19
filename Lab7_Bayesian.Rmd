@@ -193,12 +193,199 @@ myxo1.df <- as.data.frame( as.matrix(myxo1.coda) )
 ```
 
 We can then plot the posterior estimates of each parameter against the others.
-```{r myxo1.df.plots, fig.width=5, fig.height=4, warning=FALSE}
+```{r myxo1.df.plots, fig.width=5, fig.height=4, warning=FALSE, message=FALSE}
 library(ggplot2)
 qplot(a, b, data = myxo1.df, alpha = I(1/20)) + geom_smooth() + theme_bw()
 qplot(a, shape, data = myxo1.df, alpha = I(1/20)) + geom_smooth() + theme_bw()
 qplot(b, shape, data = myxo1.df, alpha = I(1/20)) + geom_smooth() + theme_bw()
 ```
 
+Lastly, I think it is always good to see your best-fit model against the actual data, if just because it is satisfying. So let's do that. 
+
+```{r myxo1.plot.data, fig.width=5, fig.height=4}
+# create a Ricker function to plot
+Ricker <- function(x, a, b) { a*x*exp(-b*x) }
+
+# extract the mean values of a & b
+( pars1 <- summary(myxo1.coda)$statistics[1:2,1] ) 
+
+qplot(day, titer, xlim = c(0,9), ylim = c(0, 9)) + 
+	stat_function(fun = Ricker, args = as.list(pars1))
+```
+Ideally, this will look very similar to what you got when you fit this same curve using likelihood methods as your homework last week. It's a pretty reasonable fit, although the data don't really support the titer going down after 7 or so days. More on this in a moment.
+
+**Let us summarize** our results so far. Using vague priors, we get almost the exact same parameter estimates that we did when we just did a straight up likelihood model.  This is usually the case with simple models like the run we ran here.  However, answers can be quite different with more complicated models, and in fact the Bayesian approach allows us to simultaneously fit complex models that we could not do effectively using likelihood-based approaches.  That said, there are two main advantages to the Bayesian approach, both having to do with the fact that the answer comes in the form of a probability distribution instead of a point estimate.  
+
+First, the credible interval is much nicer than a confidence interval.  There’s none of this "given that the null hypothesis is true, and we were to resample the data 100 times...".  You can state simply that there’s a 95% probability that the value of the parameter lies within the credible interval.  Period.  
+
+Second, and more importantly from a pragmatic standpoint, you can draw from these parameter probability distributions to create simulations that include the full variability of outcomes instead of just point estimates, which will demonstrate the implications of your parameter estimates (e.g. under different management scenarios, climate change, etc.).  We’ll explore how to do this a little later.
 
 
+Model comparison in a Bayesian framework
+----------------------------------------
+
+As we noted above, there really isn’t much evidence in the data for that downward turn in the function after day 6 or 7. We chose a model that indicated decline in titer levels following a peak based on the behavior of other myxomytosis grades, but given the virulence of this particular grade most animals die once the titer levels reach their maximum.  Might it be more appropriate to fit a model that levels off at some asymptote instead of declining following the peak?  We can compare our Ricker model with a model like this using the Deviance Information Criterion (DIC) to see which model better explains the data.
+
+Let’s use the Michaelis-Menten function which has the same number of parameters as the Ricker function, but increases to an asymptote. The equation is:
+
+\begin{aligned}
+  f(x) & = \frac{ax}{b+x} 
+\end{aligned}
+
+where $a$ is the asymptote and $b$ is where the half-maximum occurs. If you are not ver comfortable with the Michaelis-Menton (MM) function, try plotting it with some different parameters over the data.
+
+We will stick with the same assumption of Gamma-distributed errors.
+
+Some reasonable initial values might be:
+```{r mm.inits}
+inits <- list(list(a=8,  b=0.5, shape=90),   
+							list(a=10, b=1,   shape=100),   
+							list(a=7,  b=1.2, shape=70))
+```
+
+Make a model file:
+```{r myxomodel2.sink, eval=FALSE}
+sink("myxomodel2.txt")
+cat("
+model {
+	for (i in 1:n) {
+		mean [ i ] <- a*day[ i ]/ (b + day[ i ])
+		rate [ i ] <- shape/mean[ i ]
+		titer [ i ] ~ dgamma (shape, rate[ i ])
+	}
+##priors
+a ~ dgamma (0.1, 0.1)
+b ~ dgamma (0.1, 0.1)
+shape ~ dgamma (0.01, 0.01)
+}
+", fill=TRUE)
+sink()
+```
+
+Next, create the model with JAGS
+```{r myxo2.jags, eval=FALSE}
+dataList <- list("titer" = titer, "day" = day, "n" = n)
+
+myxo2.jags <- jags.model("myxomodel2.txt",
+												 data = dataList,
+												 n.chains = 3,
+												 inits = inits)
+```
+
+
+```{r myxo2.jags.inline, echo=FALSE, warning=FALSE}
+### Have to do this b/c RStudio creates a clean environment 
+# when it runs the RMarkdown stuff and the model file 
+# doesn't exist in this new environment
+
+modelstring <- "
+model {
+	for (i in 1:n) {
+		mean [ i ] <- a*day[ i ]/ (b + day[ i ])
+		rate [ i ] <- shape/mean[ i ]
+		titer [ i ] ~ dgamma (shape, rate[ i ])
+	}
+##priors
+a ~ dgamma (0.1, 0.1)
+b ~ dgamma (0.1, 0.1)
+shape ~ dgamma (0.01, 0.01)
+}
+"
+
+dataList <- list("titer" = titer, "day" = day, "n" = n)
+
+myxo2.jags <- jags.model(textConnection(modelstring),
+                   data = dataList,
+                   n.chains = 3,
+                   inits = inits)
+```
+
+Then burn it in and sample the posterior, just like before.
+```{r myxo2.run, cache=TRUE}
+update(myxo2.jags, n.iter = 1000) # Let it "burn in" 1000 steps
+
+myxo2.coda <- coda.samples(myxo2.jags,
+             variable.names = c("a", "b", "shape"),
+             n.iter = 10000) #This is the number of steps we want to save 
+
+summary(myxo2.coda)
+```
+
+Did the mcmc chains converge on the posterior? 
+```{r myxo2.coda.gelman}
+gelman.diag( myxo2.coda )
+```
+Yup. That's always good to see.
+
+And now let's plot the best fit lines of both models
+```{r myxo12.plot.data, fig.width=5, fig.height=4}
+# create a Michaelis-Menton function to plot
+MM <- function(x, a, b) { a*x/(b+x) }
+
+# extract the mean values of a & b for the second model
+( pars2 <- summary(myxo2.coda)$statistics[1:2,1] ) 
+
+qplot(day, titer, xlim = c(0,9), ylim = c(0, 9)) + 
+	stat_function(fun = Ricker, args = as.list(pars1), color = "red") + 
+	stat_function(fun = MM, args = as.list(pars2), color = "blue")
+```
+
+OK, but which model fits better? That was what we wanted to know initially. We will use the deviance informatin criterion (DIC) to compare our two models. DIC is calculated as the "effective number of parameters" (pD) pluse the expected deviance of the model. To calculated DIC from our models, we need to use the `dic.samples()` function to take additional samples from our JAGS model, now keeping track of some different things. (Note that this approach, taking extra samples, is unique to JAGS.)
+```{r calc.dic}
+(d1 <- dic.samples(myxo1.jags, n.iter = 1000, type = "pD") )
+(d2 <- dic.samples(myxo2.jags, n.iter = 1000, type = "pD") )
+diffdic(d1, d2)
+```
+This would seem to indicate that MM model is a better one. (The number would be negative if the Ricker model was a better fit.) Using AIC-like cutoffs, we would then say something like, "The Michaelis-Menton model was a substantially better fit to the data than the Rick model." To quote from the help files for `diffdic()`, however, "The problem of determining what is a noteworthy difference in DIC (or other penalized deviance) between two models is currently unsolved. ...Plummer (2008) argues that there is no absolute scale for comparison of two penalized deviance statistics, and proposes that the difference should be calibrated with respect to the sample standard deviation..." If we follow this rule, then the difference in DIC isn't nearly as substantial. Unfortunately, I haven't seen any clear guidance about model selection in a Bayesian framework. My (limited) advice is this: be clear about which criterion you are using and how you are using it, and then be consistent. 
+
+To emphasize the point that these models are not that different, and to show you how you can sample from the posterior distributions, let's create 95% credible intervals along the entire curves. In essenence what we need to do is choose a random set of parameters from the posterior distributions, generate predicted values along the x-axis (=days) given those parameters, and repeate a whole bunch of times. We can then find the 2.5% and 97.5% quantiles at each point along the x-axis. These are the bottom and top of our credible intervals, which we can then plot using `geom_ribbon`.
+
+```{r calculate.credible.intervals}
+myxo2.df <- as.data.frame(as.matrix(myxo2.coda))
+
+# create a vector of x-values. 50 is smooth enough for our purpose
+x <- seq(0,9, length = 50)
+
+# and matrices to hold the resulting y values (predictions) for these x-values given the appropriate models and parameters drawn from the posterior distributions
+ys.ricker <- ys.mm <- matrix(, ncol = length(x), nrow = 1000)
+
+# establish the length of the posterior samples
+n <- dim(myxo1.df)[1]
+
+for(i in 1:1000){
+	# get a random draw from the posteriors (just the position in the long, long data frame of values)
+	index <- sample(n, 1)
+	# calculate the predicted y-values for both models, given these random values from the posterior distributions of each parameter
+	ys.ricker[i,] <- Ricker(x, a = myxo1.df[index, 1], b = myxo1.df[index, 2])
+	ys.mm[i,] <- MM(x, a = myxo2.df[index, 1], b = myxo2.df[index, 2])
+}
+
+# sort each column (=position along the x-axis) from low y-values to high y-values
+ys.ricker <- apply(ys.ricker, 2, sort)
+ys.mm <- apply(ys.mm, 2, sort)
+
+# then, using the rank (=row number), extract y-values that are in the right percentiles
+lo.ricker <- ys.ricker[25,] # lower 2.5th percentile = 25th out of 1000 rows
+hi.ricker <- ys.ricker[975,] # upper 97.5th percentile
+lo.mm <- ys.mm[25,]
+hi.mm <- ys.mm[975,]
+```
+
+Lastly, let's plot these credible intervals over their respective lines
+```{r plot.credible.intervals, fig.width=5, fig.height=4}
+qplot(day, titer, xlim = c(0,9), ylim = c(0, 9)) +    
+	
+	stat_function(fun = Ricker, args = as.list(pars1), color = "red") +    
+	
+	stat_function(fun = MM, args = as.list(pars2), color = "blue") +    
+	
+	geom_ribbon(aes(x = x, y = lo.ricker, ymin = lo.ricker, ymax = hi.ricker),    
+							fill = "red", alpha = 0.25) +    
+	
+	geom_ribbon(aes(x = x, y = lo.mm, ymin = lo.mm, ymax = hi.mm),    
+							fill = "blue", alpha = 0.25)
+```
+
+As you can see, the credible intervals overlap over the entire range of the data. They are not _that_ different, which lends credibility to the idea that, at least for this data set, both models are reasonable.
+
+It is pretty easy to simulate data or predictions from the posterior distributions, which is a nice feature of Bayesian analyses. You can rest easy that your predictions account for all of the uncertainty in your model. Think about how you would go about doing the same thing in a likelihood frame work... is it even possible? 
