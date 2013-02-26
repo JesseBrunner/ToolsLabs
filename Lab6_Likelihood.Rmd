@@ -354,10 +354,11 @@ Let’s review the steps of what we just did:
 Homework: Fit a Ricker model to the myxomatosis data
 ----------------------------------------------------
 
-We went through, start to finish, one analysis of predation rates of tadpoles. The best way to make this stick is to do it again on your own, with a new data set. Your assignment is to analyze the myxomatosis data set in the `emdbook` package by trying to fit a Ricker model to these data. 
+We went through, start to finish, one analysis of predation rates of tadpoles. The best way to make this stick is to do it again on your own, with a new data set. Your assignment is to analyze the myxomatosis data set in the `emdbook` package by trying to fit a Ricker model to these data. We will restrict our analyses just to Grade I (the most virulent) myxomatosis.
 ```{r myxo, eval=FALSE}
 library(emdbook)
 data(MyxoTiter_sum)
+myxo <- subset(MyxoTiter_sum, grade == 1)
 ```
 The analyses are analogous to what we just did, so just adapt what we did (making sure  you understand it) and don't re-invent the wheel (unless you like that sort of thing). If you get stuck, you can refer to the book, work with you fellow students, and even ask me questions. 
 

@@ -1,7 +1,7 @@
-Baysian Analyses with WinBUGS (and some of that): EMD chapter 6
+Baysian Analyses with ~~WinBUGS~~ JAGS: EMD chapter 6
 ========================================================
-
-_Modifed from a lab by Elizabeth Hunter (2011), with help from Marc Kery (2010) and Ben Bolker (2008)_
+ 
+_Modifed from a lab by Elizabeth Hunter (2011) with help from Marc Kery (2010) and Ben Bolker (2008)_ 
 
 In this lab we will be applying a Bayesian approach to model fitting using the same myxomatosis dataset and model that was the homework in the previous likelihood lab.  Historically we would follow Bolker's example and use the program **WinBUGS** (**B**ayesian inference **U**sing the **G**ibbs **S**ampler), but there is a lot of development in the Bayesian world. WinBUGS has now been superceded by [OpenBUGS](http://www.openbugs.info/) in most respects and is still be actively developed, whereas WinBUGS is not. More importantly, at least for our purposes, these are both written for PCs. Although it is possible to run them on Linux or Mac OSX using [Wine](http://www.winehq.org/), that can introduce a lot of stupid headaches that I wish to avoid. Instead we are going to use an open-source, cross-platform (and perhaps faster) program called [JAGS](http://mcmc-jags.sourceforge.net/) (**J**ust **A**nother **G**ibbs **S**ampler). The underlying approach and code among is largely identical between these three---indeed, all are variants of the BUGS language---so the WinBUGS code in Bolker's book should work without modification. The `rjags` package works a bit differently than `R2WinBUGS`, though, so keep an eye out for that.  
 
@@ -336,56 +336,83 @@ OK, but which model fits better? That was what we wanted to know initially. We w
 (d2 <- dic.samples(myxo2.jags, n.iter = 1000, type = "pD") )
 diffdic(d1, d2)
 ```
-This would seem to indicate that MM model is a better one. (The number would be negative if the Ricker model was a better fit.) Using AIC-like cutoffs, we would then say something like, "The Michaelis-Menton model was a substantially better fit to the data than the Rick model." To quote from the help files for `diffdic()`, however, "The problem of determining what is a noteworthy difference in DIC (or other penalized deviance) between two models is currently unsolved. ...Plummer (2008) argues that there is no absolute scale for comparison of two penalized deviance statistics, and proposes that the difference should be calibrated with respect to the sample standard deviation..." If we follow this rule, then the difference in DIC isn't nearly as substantial. Unfortunately, I haven't seen any clear guidance about model selection in a Bayesian framework. My (limited) advice is this: be clear about which criterion you are using and how you are using it, and then be consistent. 
+This would seem to indicate that MM model is a better one. (The number would be negative if the Ricker model was a better fit.) Using AIC-like cutoffs, like those proposed in the Bolker book (p. 214), we would then say something like, "The Michaelis-Menton model was a substantially better fit to the data than the Ricker model." To quote from the help files for `diffdic()`, however, "The problem of determining what is a noteworthy difference in DIC (or other penalized deviance) between two models is currently unsolved. ...Plummer (2008) argues that there is no absolute scale for comparison of two penalized deviance statistics, and proposes that the difference should be calibrated with respect to the sample standard deviation..." If we follow this rule, then the difference in DIC isn't nearly as substantial. Unfortunately, I haven't seen any clear guidance about model selection in a Bayesian framework. My (limited) advice is this: be clear about which criterion you are using and how you are using it, be consistent, but remember that you are the biologist and don't blindly follow what some number tells you. 
 
-To emphasize the point that these models are not that different, and to show you how you can sample from the posterior distributions, let's create 95% credible intervals along the entire curves. In essenence what we need to do is choose a random set of parameters from the posterior distributions, generate predicted values along the x-axis (=days) given those parameters, and repeate a whole bunch of times. We can then find the 2.5% and 97.5% quantiles at each point along the x-axis. These are the bottom and top of our credible intervals, which we can then plot using `geom_ribbon`.
+To emphasize the point that these models are not that different, and to show you how you can sample from the posterior distributions to great effect, let's create a _posterior predictive interval_. This is essentially the interval that we expect to encompass 95% (or whatever cutoffs we want) of the values of any _new_ data we were to collect (e.g., if we were to take more grade I myxomatosis virus and repeat the experiment, we would expect 95% of the observed titers to fall within this interval). This interval includes both the effect of gamma sampling error for our new observations, but also the uncertainty in the parameters of the Ricker model that inform the gamma. 
 
-```{r calculate.credible.intervals}
+In essenence what we need to do is choose a random set of parameters from the posterior distributions, generate predicted values along the x-axis (=days) given those parameters, and repeate a whole bunch of times. We can then find the 2.5% and 97.5% quantiles at each point along the x-axis. These are the bottom and top of our credible intervals, which we can then plot using `geom_ribbon`.
+
+First we need to turn the `myxo2.coda` object with three chains into a data frame with columns for each parameter and the chains smooshed together.
+```{r myxo2.df}
 myxo2.df <- as.data.frame(as.matrix(myxo2.coda))
 
-# create a vector of x-values. 50 is smooth enough for our purpose
-x <- seq(0,9, length = 50)
-
-# and matrices to hold the resulting y values (predictions) for these x-values given the appropriate models and parameters drawn from the posterior distributions
-ys.ricker <- ys.mm <- matrix(, ncol = length(x), nrow = 1000)
-
-# establish the length of the posterior samples
-n <- dim(myxo1.df)[1]
-
-for(i in 1:1000){
-	# get a random draw from the posteriors (just the position in the long, long data frame of values)
-	index <- sample(n, 1)
-	# calculate the predicted y-values for both models, given these random values from the posterior distributions of each parameter
-	ys.ricker[i,] <- Ricker(x, a = myxo1.df[index, 1], b = myxo1.df[index, 2])
-	ys.mm[i,] <- MM(x, a = myxo2.df[index, 1], b = myxo2.df[index, 2])
-}
-
-# sort each column (=position along the x-axis) from low y-values to high y-values
-ys.ricker <- apply(ys.ricker, 2, sort)
-ys.mm <- apply(ys.mm, 2, sort)
-
-# then, using the rank (=row number), extract y-values that are in the right percentiles
-lo.ricker <- ys.ricker[25,] # lower 2.5th percentile = 25th out of 1000 rows
-hi.ricker <- ys.ricker[975,] # upper 97.5th percentile
-lo.mm <- ys.mm[25,]
-hi.mm <- ys.mm[975,]
 ```
 
-Lastly, let's plot these credible intervals over their respective lines
+Then we need to   
+1. set up a vector of x-values (= fractions of a day) over which to estimate the predictions. 50 values is smooth enough for our purposes.
+2. create matrices to hold the resulting y values (predictions) for these x-values given the appropriate models and parameters drawn from the posterior distributions. 10,000 iterations should be plenty to give us reasonably smooth estimates of the intervals.
+3. establish the length of the posterior samples, from which we will take random draws
+```{r setup.predictive.intervals}
+x <- seq(0,9, length = 50)
+
+ys.ricker <- ys.mm <- matrix(, ncol = length(x), nrow = 10000)
+
+n <- dim(myxo1.df)[1]
+```
+
+Next, we need to 
+4. loop through each of the 10,000 iterations. Each time we will   
+
+	1. take a random draw from the posterior   
+	2. calculate the predicted value from each model   
+	3. simulate observations given these predictions and the `shape` parameter of the gamma distribution  
+
+```{r simulate.predictive.intervals}
+for(i in 1:10000){
+	# get a random draw from the posteriors (just the position in the long, long data frame of values)
+	index <- sample(n, 1)
+	
+	# calculate the predicted y-values for both models, given these random values from the posterior distributions of each parameter
+	# This is how we account for uncertanty in the parameter values. More likely values should come up more often
+	pred.Ricker <- Ricker(x, a = myxo1.df[index, 1], b = myxo1.df[index, 2])
+	pred.MM <- MM(x, a = myxo2.df[index, 1], b = myxo2.df[index, 2])
+	
+	# and extract the shape parameter from each model
+	shape.Ricker <- myxo1.df[index, 3]
+	shape.MM <- myxo2.df[index, 3]
+	
+	# then take 50 (=length of x) random draws from the gamma with the appropriate rate and shape parameters.
+	# Essentially we are simulating new data from our posterior distributions. This is how we account for the sampling variation (the rgamma() ) and the parameter uncertainty (the fact that the shape and rate parameters are taken from the posterior distributions)
+	ys.ricker[i,] <- rgamma(50, rate = shape.Ricker/pred.Ricker, shape = shape.Ricker)
+	ys.mm[i,] <- rgamma(50, rate = shape.MM/pred.MM, shape = shape.MM)
+}
+```
+
+Lastly, we need to    
+5. find the 2.5% and 97.5% intervals from these simulated observations
+```{r calculate.predictive.intervals}
+# to extract the 2.5th and 97.5th quantiles at each point along the x-axis (=column) we can use the quantile() function. We apply this to each column. This gives us the posterior predictive interval (ppi)
+# Note: the "2" means columns. A "1" would mean by rows.
+# Also note that we need to transpose the matrices so that each row is a given value of x and the columns represent the 2.5% and 97.5% quantiles 
+ppi.ricker <- t( apply(ys.ricker, 2, quantile, c(0.025, 0.975)) )
+ppi.mm <- t( apply(ys.mm, 2, quantile, c(0.025, 0.975)) )
+```
+
+Finally, let's plot these credible intervals over their respective lines
 ```{r plot.credible.intervals, fig.width=5, fig.height=4}
-qplot(day, titer, xlim = c(0,9), ylim = c(0, 9)) +    
+qplot(day, titer) +    
 	
 	stat_function(fun = Ricker, args = as.list(pars1), color = "red") +    
 	
 	stat_function(fun = MM, args = as.list(pars2), color = "blue") +    
 	
-	geom_ribbon(aes(x = x, y = lo.ricker, ymin = lo.ricker, ymax = hi.ricker),    
+	geom_ribbon(aes(x = x, y = ppi.ricker[,1], ymin = ppi.ricker[,1], ymax = ppi.ricker[,2]),    
 							fill = "red", alpha = 0.25) +    
 	
-	geom_ribbon(aes(x = x, y = lo.mm, ymin = lo.mm, ymax = hi.mm),    
+	geom_ribbon(aes(x = x, y = ppi.mm[,1], ymin = ppi.mm[,1], ymax = ppi.mm[,2]),    
 							fill = "blue", alpha = 0.25)
 ```
 
-As you can see, the credible intervals overlap over the entire range of the data. They are not _that_ different, which lends credibility to the idea that, at least for this data set, both models are reasonable.
+As you can see, the predictive intervals overlap over the entire range of the data. That is, they are not predicting different outcomes, which lends credibility to the idea that, at least for this data set, both models are reasonable.
 
 It is pretty easy to simulate data or predictions from the posterior distributions, which is a nice feature of Bayesian analyses. You can rest easy that your predictions account for all of the uncertainty in your model. Think about how you would go about doing the same thing in a likelihood frame work... is it even possible? 
