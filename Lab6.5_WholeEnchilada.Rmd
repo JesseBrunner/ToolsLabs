@@ -1,0 +1,123 @@
+The Whole Likelihood Enchilada
+==============================
+From model specification to model selection (Lab 6.5)
+-----------------------------------------------------
+
+Our goal in this lab is to complete a whole analysis in the likelihood framework without training wheels. This will involve:   
+
+1. specifying a set of deterministic models   
+2. specifying the stochastic error distribution   
+3. fitting your models to the data using likelihood as your metric   
+4. comparing the relative support for each model using Akaike's Informatin Criterion
+5. finding the confidence intervals on the key parameters of the best model(s)
+6. plotting the best-fit model (and associated confidence region) against the data
+
+And I'd like you to start using the R Markdown syntax so you can  generate a webpage that includes both your prose as well as the output of any embedded R code chunks within the document. 
+
+The problem
+-----------
+When large aquatic mammals die in the oceans, they fall to the sea floor and support a large assemblage of scavengers and decomposers. Most decomposition occurs during a "mobile-scavenger stage lasting months to years, during which aggregations of sleeper sharks, hagfish, rat-tails and invertebrate scavengers remove whale soft tissue at high rates" (Smith and Baco 2003). Such "Whale falls" must attract these scavengers from long distances. Smith and Baco (2003) present estimates of the mass and rates of decomposition of five natural and experimentally implanted whale carcasses off the coast of California, as well as the rates of decomposition for three small cetaceans observed in the North Atlantic (Jones et al. 1998). 
+
+There are two questions I would like to address with these data:
+
+1. How does scavenging rate change with the mass of the carcass?
+2. Does scavenging of whales in the North Atlantic differ from Southern California?
+
+I would like you to use likelihood methods to answer these questions to the best of your abilities (and the best of the data).
+
+
+The data 
+--------
+These data are "scavenged" from the Smith and Baco (2003) paper. They can be found on the lab wiki.
+```{r load.scavdata}
+scav <- read.csv("WhaleFallScavenging.csv")
+scav
+```
+`Location` is either Southern Californica (`SoCal`) or North Atlantic (`NAtl`).   
+`CarcWt` is the mass of the carcass in kg.   
+`ScavRt` is the scavenging rate in kg/day.   
+```{r plot.scavdata}
+library(ggplot2)
+qplot(x = CarcWt, y = ScavRt, color = Location, data = scav)
+```
+
+
+The deterministic models
+------------------------
+If you plot the scavenging rate against the log of carcass mass, you might guess that the rate of scavenging increases linearly as the mass doubles (i.e., an exponential model). Indeed, the Smith and Baco (2003) used this model. Interesting this implies that carcasses that are ~ 5000 Kg have already attracted 2/3rds of the scavengers in the area; it takes more and more mass to attract those few, reticent scavangers. 
+
+Alternatively, we might expect that the scavenging rate increases linearly with surface area of the whale. Cribbing from Woodward et al. (2006), we can expect the surface area ($SA$) in m^2 to increase with $Mass$ in Kg as:
+$$
+  \begin{aligned}
+		SA \approx 0.08 \times \text{Mass}^{0.65}
+  \end{aligned}
+$$
+
+If you can think of alternative models (monomolecular or Michaelis-Menton anyone?), try that as well.
+
+The stochastic distribution
+---------------------------
+Given what you know about the data, either from first principles or how it looks, choose a stochastic distribution to represent the error around the deterministic expectations. Make sure you understand what parameter(s) it requires and what they do.
+
+
+The likelihood functions
+------------------------
+You will need to write functions to calculate the negative log-likelihood for each model you are considering. One hint: depending on what function you decide to use to fit your model to the data (see below) you may want to write your function slightly differently. 
+
+
+Model fitting
+-------------
+You are welcome to use `optim()` or the `mle2()` function in `bbmle` package. Either way, you need to fit your models (via your likelihood functions) to the data.
+
+
+Model comparison
+----------------
+You will remember that Akaike's Information Criterion (AIC) is calculated as
+$$
+  \begin{aligned}
+   \text{AIC} = -2\ln\left(L\right) + 2k
+  \end{aligned}
+$$
+where $L$ is the log-likelihood and $k$ is the number of parameters in the model (don't forget the parameters you estimate in the error term, such as the variance!). We generally include the small sample correction factor, which is
+$$
+  \begin{aligned}
+   \text{AIC}_{c} = -2\ln\left(L\right) + 2k\left(\frac{n}{n-k-1}\right)
+  \end{aligned}
+$$
+So all you need to calculate the $\text{AIC}_{c}$ is the log-likelihood of the model, the number of parameters you estimate, and your sample size. Easy, right? So use $\text{AIC}_{c}$ to sort the wheat from the chaff (ha, ha, ha... it's funny in the Palouse, right?) and come up with your best supported model(s).
+
+You may also want to compute Akaike weights. First you need the differences in $\text{AICc}_{i}$ from the best model ($\text{AICc}_{min}$), which we can call $\Delta_{i}$. Then the **relative likelihood** of model $i$ is $\exp \left[ -\frac{1}{2} \Delta_{i} \right]$. Calculate the relative likelihood for all of the $m$ models. Then the Akaike weight for each model is then
+$$
+  \begin{equation}
+ 	w_{i} = \frac{\exp \left[ -\frac{1}{2} \Delta_{i} \right]} 
+ 	             {\sum\limits_{i=1}^m \exp \left[ -\frac{1}{2} \Delta_{i} \right]}
+  \end{equation}
+$$
+
+These weights put $\text{AIC}_{c}$ values on a more interpretable scale, one that sums to one. They give the weight behind each model in the full set of models you tested. They can be interpretted as probabilities in the sense that if you were to go and get more data from the same population/experiment and refit these models, the Akaike weights gives the probability that a given model would be judged the best model on repeated sampling.
+
+Confidence intervals
+--------------------
+We spent quite a lot of time on CI's, so here you get some more practice! 
+
+Note: One way to go about seeing if the North Atlantic data are significantly different from the Southern California data is to fit the model to the SoCal data and then calculate the confidence intervals of the parameters. You can find the combination of values on the bivariate CI that provide a value as close to the North Atlantic values as possible. This accounts for the uncertainty in the parameters themselves. Then add in the "plug-in" 95% confidence interval around this deterministic expectation based on your stochastic distribution. (Be sure to use the $t$-distribution, `qt()`, rather than the normal.) This is an _ad hoc_ version (i.e., almost, but not quite right) of a **prediction interval**, which accounts for both parameter uncertainty and the variance (i.e., sampling error). (It is also rather analagous to the posterior predictive distribution that you might calculate from a Bayesian analysis.) If the North Atlantic data fall within prediction interval, it would seem reasonable that the might come from the same underlying process. If those points are outside the CI, then it is difficult to make the case that they come from the same underlying process. 
+
+Pretty pictures
+---------------
+Lastly, we always want to be able to show, as best we can, how well our model(s) fit the data. You may also find your estimates of confidence intervals useful in showing how the model fits. 
+
+
+Assignment
+---------
+Your assignment is to write up your analysis as a short report using the `*.Rmd` format and _Knit HTML_ button. The point of an analysis report is to set out the problem, explain your approach, and then lay out what was learned from your analyses (i.e., your answers to the two questions above). It's rather like a scientific paper, but without such a long intro and discussion. We do not need to see how the sausage is made, just the outline of what you did and what you found. So for instance, there is no need to show your reader (i.e., me) your model code, but I do want to see that MLEs of your parameters, their confidence intervals, maybe some $\text{AICc}_{min}$ values or Akaike weights, and whatever graphs help illustrate your points.
+
+Send me the html file of our analysis report by next Tuesday.
+
+
+
+### References
+Jones, E.G., Collins, M.A., Bagley, P.M., Addison, S. & Priede, I.G. 1998. The fate of cetacean carcasses in the deep sea: observations on consumption rates and succession of scavenging species in the abyssal northeast Atlantic Ocean. Proceedings of the Royal Society of London Series B- Biological Sciences 265, 1119–1127.
+
+Smith, C. R., and A. R. Baco. 2003. Ecology of whale falls at the deep-sea floor. Oceanography and Marine Biology 41:311-354.  
+
+Woodward, B. L., J. P. Winn, and F. E. Fish. 2006. Morphological specializations of baleen whales associated with hydrodynamic performance and ecological niche. J Morphol 267:1284-1294.

@@ -1,0 +1,112 @@
+The Whole Likelihood Enchilada - Write up
+==============================
+
+Jesse Brunner   
+`r date()`
+
+The problem
+-----------
+When large aquatic mammals die in the oceans, they fall to the sea floor and support a large assemblage of scavengers and decomposers. Most decomposition occurs during a "mobile-scavenger stage lasting months to years, during which aggregations of sleeper sharks, hagfish, rat-tails and invertebrate scavengers remove whale soft tissue at high rates" (Smith and Baco 2003). Such "Whale falls" must attract these scavengers from long distances. Smith and Baco (2003) present estimates of the mass and rates of decomposition of five natural and experimentally implanted whale carcasses off the coast of California, as well as the rates of decomposition for three small cetaceans observed in the North Atlantic (Jones et al. 1998). 
+
+There are two questions I addressed with these data:
+
+1. How does scavenging rate change with the mass of the carcass?
+2. Does scavenging of whales in the North Atlantic differ from Southern California?
+
+
+```{r load.scavdata, echo=FALSE, results='hide'}
+scav <- read.csv("WhaleFallScavenging.csv")
+scav
+```
+
+The models & approach
+------------------------
+I tested two models of how the scavenging rate changes with carcass mass. In the first, the rate of scavenging increases linearly with $\log(\text{Mass}). This was the model that Smith and Baco (2003) applied to the data. Secondly, I tested a model in whic the scavenging rate increases linearly with _surface area_ of the carcass. I used a published relationship between surface area ($SA$) in m^2 to increase with $Mass$ in Kg (Woodward et al. 2006):
+$$
+  \begin{aligned}
+		SA \approx 0.08 \times \text{Mass}^{0.65}
+  \end{aligned}
+$$
+In both cases I fixed the intercept to zero because a) there should be no scavenging without some mass to scavenge and b) with so few data points I wished to avoid extraneous parameters. 
+
+I also assumed that the errors were normally distributed. While this could allow negative values (i.e., negative scavenging rates) to occur, with so few data points the choice of stochastic distribution probably does not matter much.
+
+I fit both models to the five observations from southern California and used Akaike's Information Criterion to evaluate the evidence for each. I then calculates the bivariate confidence intervals around the two parameters (intercept and slope) and used these to calculate the scavenging rate that most closely matched that observed in the North Atlantic. I then used the plug-in confidence interval from the normal distribution to find out whether the North Atlantic observations might be encompassed in this confidence interval that includes both model uncertainty and sampling error. 
+
+```{r LL.logmass, echo=FALSE, results='hide', warning=FALSE, message=FALSE}
+library(bbmle)
+m.logmass <- mle2( ScavRt ~ dnorm(mean = slope*log10(CarcWt), sd = stdev), 
+						start=list(slope= 10, stdev = 2 ),
+						data = subset(scav, Location == "SoCal")
+						)
+summary(m.logmass)
+c.logmass <- confint(m.logmass)
+```
+
+```{r LL.surf, echo=FALSE, results='hide', warning=FALSE}
+library(bbmle)
+m.surf <- mle2( ScavRt ~ dnorm(mean = slope*0.08*CarcWt^(0.65), sd = stdev), 
+						start=list(slope= 1, stdev = 2 ),
+						data = subset(scav, Location == "SoCal")
+						)
+summary(m.surf)
+c.surf <- confint(m.surf)
+```
+
+```{r comparemodels, echo=FALSE, results='hide'}
+# Testing whether there is significant difference b/w models
+lrt <- anova(m.logmass, m.surf)
+# calculating delta AICc and AIC weights
+aic <- AICctab(m.logmass, m.surf, weights = TRUE, nobs = 5)
+```
+
+Results
+-------
+There was virtually no support for the SA model in the Southern California data set ($\Delta \text{AIC}_{c} =$ `r round(aic$dAICc[2], 2) `; $w_{SA} =$ `r round(aic$weight[2], 3)`). Intead, virutally all of the evidentiary weight fell behind the $\log(Mass)$ model ($w_{\log(Mass)} =$ `r round(aic$weight[1], 3)`). In this model the scavenging rate increased by `r round(coef(m.logmass)["slope"], 3)` Kg/day (95% CI: `r round(c.logmass["slope", 1], 3)` --- `r round(c.logmass["slope", 2], 3)`) with every 10-fold increase in mass.
+
+```{r plot.m.logmass, echo=FALSE, warning=FALSE, fig.width=7,fig.height=5}
+# generate new data
+new <- data.frame(CarcWt = 10^seq(log10(min(scav$CarcWt)), log10(max(scav$CarcWt)), length = 100) )
+new$Location <- "SoCal"
+# and predictions
+new$ScavRt <- predict(m.logmass, newdata = new )
+# generate predictions from 2.5% and 97.5% values of slope
+new$pred.lo <- c.logmass["slope", 1]*log10(new$CarcWt)
+new$pred.hi <- c.logmass["slope", 2]*log10(new$CarcWt)
+# and then plug-in CIs for these lo/hi values of the slope
+new$plug.lo <- new$ScavRt + qt(0.025, df = 3) * coef(m.logmass)["stdev"]
+new$plug.hi <- new$ScavRt + qt(0.975, df = 3) * coef(m.logmass)["stdev"]
+
+new$sa <-  predict(m.surf, newdata = new )
+
+#test <- lm(ScavRt ~ -1 + I(log10(CarcWt)), data = subset(scav, Location == "SoCal") )
+#new2 <- predict(test, new, interval = "predict")
+#new <- cbind(new, new2)
+
+library(ggplot2)
+qplot(x = CarcWt, y = ScavRt, data = scav, shape = Location, log = "x", 
+			xlab = "Mass (Kg)", ylab = "Scavenging rate (Kg/day)",
+			ylim = c(0, 70)) + 
+	geom_line(data = new) +  # prediction of m.logmass
+	geom_line(data = new, aes(y = plug.lo), linetype = 2) + #lower CI
+	geom_line(data = new, aes(y = plug.hi), linetype = 2) + # upper CI
+	scale_shape(labels = c("Southern\nCalifornia", "North\nAtlantic")) + 
+	theme_bw() + 
+	#geom_line(data = new, aes(y = lwr), linetype = 3, color = "red") + #lower CI
+	#geom_line(data = new, aes(y = upr), linetype = 3, color = "red") + # upper CI
+	geom_line(data = new, aes(y = sa), color = I("gray"), linetype = I(3)) # m.surf prediction
+	
+```
+This graph shows the data from Smith and Baco (2003) and the best-fit line of the log(Mass) model (solid, black) adn the associated 95% confidence interval accounting (imperfectly) for parameter uncertainty and sampling error (dashed lines).  Since thise confidence interval include only one of the three points from the North Atlantic, it seems unlikely that the mobile scavenging phase is the same in these two locations. For completeness, the light gray line is the prediction of the SA model, which fit poorly.
+
+In summary:
+
+1. The scavenging rate increases linearly with $log_{10}(\text{Mass})$, by approximately `r round(c.logmass["slope", 2])` Kg/day with every 10-fold increase in mass.
+2. The scavenging rate in the North Atlantic seems to be rather different from that in Southern California.
+
+### References
+Jones, E.G., Collins, M.A., Bagley, P.M., Addison, S. & Priede, I.G. 1998. The fate of cetacean carcasses in the deep sea: observations on consumption rates and succession of scavenging species in the abyssal northeast Atlantic Ocean. Proceedings of the Royal Society of London Series B- Biological Sciences 265, 1119–1127.
+
+Smith, C. R., and A. R. Baco. 2003. Ecology of whale falls at the deep-sea floor. Oceanography and Marine Biology 41:311-354.  
+
+Woodward, B. L., J. P. Winn, and F. E. Fish. 2006. Morphological specializations of baleen whales associated with hydrodynamic performance and ecological niche. J Morphol 267:1284-1294.
