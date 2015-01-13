@@ -1,0 +1,237 @@
+---
+title: "Introduction to R"
+author: "Jesse Brunner"
+date: "January 12, 2015"
+output: pdf_document
+---
+
+### What is R?  
+We will be using R and R Studio in this class. R is increasingly catching on in the natural sciences with books, guides, and workshops at conferences all devoted to doing _something_ in R (or unfortunately, sometimes making you feel bad for not being in the know... see this useful discussion [here](https://labandfield.wordpress.com/2013/08/08/beware-the-academic-hipster-or-use-what-works-for-you/) and [here](https://labandfield.wordpress.com/2013/08/09/academic-hipsters-redux-and-why-open-science-is-like-going-to-the-dentist/)). In fact many of you have probably used R before in some context. But it still bares answering the questions, what is R?
+
+R is an object-oriented scripting language that combines: 
+*   a programming language called S, developed by John Chambers at Bell Labs, that can be used for numerical simulation of deterministic and stochastic dynamic models  
+*   an extensive set of functions for classical and modern statistical data analysis and modeling  
+*   graphics functions for visualizing data and model output, and creating publication-ready figures  
+*   a user interface with a few basic menus and extensive help facilities.  
+
+R is open source, cross platform, and free (in both contexts). R is very extensible (and has a _ton_ of packages extending it already). One good thing about this is that most anything you can think of has already been implemented in some package, somewhere. The down side is that there may be 12 ways to do a simple thing, leading to a lot of confusion. You can always "roll your own"---and we will---but it takes a fair bit of familiarity and understanding to do that. Unfortunately, the built-in help is made for more advanced R users and the bare-bones R is not particularly pretty, helpful, or coherent. Fortunately, we can address at least some of these issues by using R Studio.
+
+### What is R Studio?
+R Studio is an integrated development environment (IDE) that provides a coherent, pretty, and useful front-end to R. It allows you to see your console, script, output, files, etc., all in one place. It also has a lot of useful bells and whistles (code completion, version control, interactivity, save/publish as HTML or PDF) and this nice integration of Markdown, which is what I'm using to "knit" together text+code+results into this pretty document. We will be learning to use Markdown and R Studio along the way. It may feel like we're doing too much all at once, but there is really little downside and a lot to be gained by doing it "right" from the start.  
+
+# Get started with R!
+First things first. If you haven't downloaded and installed R, go to http://cran.r-project.org/ and do so (just get the latest stable release for your platform of choice).
+Then download and install R Studio at http://www.rstudio.com/products/RStudio/#Desk . 
+
+To open R, just double click on the R Studio icon. It opens R inside of it. 
+
+### First steps: R as a calculator
+NOTE: For today, we are going to enter commands on the console, the window with a `>` in it. Type your commands after the `>` and then hit enter or return. 
+
+```{r}
+2+3
+a <- 2+3 # save the output of the command to the variable (object), "a"
+# the arrow means "assign"
+a
+```
+OK, so what to notice here. First, we can use basic math as in most any calculator, Excel, or stats program. Second, we can "assign" the output of a command (here `2+3`) to a variable (here, named `a`). In Bolker's book he uses the equal sign (`=`) to assign things to variables. This works too in most cases, but occasionally it will not and sometimes there are good reasons to use the arrow (`<-`) so I will ask that you follow my lead rather than his. Lastly, you will see that everything to the right of the hash mark (technically, the "[octothorpe](http://99percentinvisible.org/episode/octothorpe/)") is ignored as a comment. We will be use a lot of comments to make it clear what we are doing and why.
+
+Anyway, we can do math on variables.
+```{r}
+a/3
+b <- 3
+a/b
+a^b # all the basic math is there, and them some!
+log(a) # natural log
+log10(a) # log10
+exp(a)/b
+exp(a/b) # parentheses clarify order of operations
+round( sqrt( exp(a/b) ) ) # We can do lots operations all at once.
+round(         sqrt(exp(a/b    )
+										)
+							 ) # the "white space" is ignored. 
+# And R will give you a `+` prompt instead of the normal `>` when you hit return and 
+# your parentheses or squiggly brackets don't add up.
+```
+Technically, `exp()`, `sqrt()`, `round()` and anything else with the name and parentheses are functions. So are `+`, `*`, `/`, and `^`, though they don't look like most other functions. So what we are doing is sending the results of one function (e.g., `exp(a/b)`) to another (e.g., `sqrt()`) to another (`round()`). The "arguments" of the function, things it takes and acts on, go inside the parentheses. For simple math we don't need to worry about this, but later on it will be helpful to know, so consider this your introduction.
+
+Math and function can also work on **vectors**
+```{r}
+d <- c(-3, -2, 1, 5, 19, 7) # the function c() is for "concatenate" 
+# or "string together"
+d  # The variable "d" is thus a vector of values 
+d/3 # math gets applied element-wise
+d/b
+d/pi # Note that "pi" is a protected name meaning 3.14159...
+abs(d)
+```
+In many cases the function is applied element-by-element, but some functions return a single variable, e.g., 
+```{r}
+mean(d)  # functions can be applied to variables. This one takes the whole vector
+summary(d)
+min(d)
+max(d)
+```
+
+### Beginning to work with data in R
+In general we will import data into R (e.g., from a spreadsheet program), but it can be very useful to specify data or sequences in some instances. We saw that we could use the `c()` function to concatenate a string of numbers (or letters if we used quotation marks around each element). We can also generate sequences of integers using the `:` function (another one that doesn't look like a function),
+```{r}
+1:10
+10:1
+-10:10
+e <- 1:20
+e
+```
+or use the `seq()` function to be clearer about what we want.
+```{r}
+seq(from=1, to=10, length=10)
+seq(from=1, to=10, by=1) # equivalent
+seq(from=-5, to=10, length=10)
+seq(from=-5, to=10, by=1) #not equivalent
+f <- seq(from = -10, to = 20, length = 20)
+f
+```
+-----------------
+
+**An aside on functions** This use of the `seq()` function brings up an important issues about functions. Before when we were getting means or logs, we simply gave the function a number or vector of numbers (e.g., `a` or `d`). Here were are specifying the start (`from`) and end (`to`) and even how long (`length`) or by what steps (`by`) we want the sequence. Most functions are written to accept either the arguments in a particular order (here, from, to, by) or, as have just seen, by name. 
+
+Try seeing what happens if you give the `seq()` function numbers without names and vice versa. Also try reversing the numbers.
+```{r, eval=FALSE}
+seq(1, 10)
+seq(1,10, 0.5)
+seq(1, 10, 20)
+seq(20, 10, 1)
+seq(from=1, to=10, length=20)
+seq(length=20, from=1, to=10)
+```
+While we can (and often do) get away with just providing numbers (or names of variables) in the right order, it is much better practice to name the arguments. At a minimum this prevents you from making stupid mistakes, but it can also make your code much easier to read for me, a stranger, or your future self. 
+
+-------------------
+
+We can pick out particular elements of a vector by subsetting using vector notation
+```{r}
+f # this is the whole vector of numbers
+f[1] # the first element
+f[c(3,4,1)] # the third, fourth, and first elements of f
+f[-c(3,4,1)] # everything but the third, fourth, and first elements
+# Note the negative sign, which means "not" in this context
+f[5:2] # the fifth through second elements of f
+```
+
+We can also use logical tests to pick out elements that meet certain requirements
+```{r}
+f > -1  # a logical test: are the elements of f greater than negative one? 
+f[ f > -1 ] # Can use this logical test to pull out just the elements that are greater than -1
+f <- f[ f > -1 ] # This will overwrite f with the elements that are greater than -1
+f # see, it is now a smaller subset. 
+# Note that the original version of f is gone. 
+# The only way to get it back is to define it again
+f <- seq(from=-10, to=20, length=20) # return it to it's original version
+```
+
+### Installing and using packages
+So far everything we've done has used functions in base R. As mentioned above, R has been extended in all sorts of ways with functions in various packages. You can install these packages from the CRAN repository (the normal way) or elsewhere (e.g., Github, etc.,).  Let us install a package for plotting data nicely (there are built-in functions, but we'll use `ggplot2` for the duration of this class). 
+```{r, eval=FALSE}
+install.packages("ggplot2")
+```
+If this is your first time using R/R Studio, you will probably be asked some questions about which repository (choose something close) and maybe where to save things. You can also just use the menus (`Tools\Install Packages...`) to do the same thing, but it will offer to autocomplete the names, which is nice. 
+
+So we have the package installed, but not loaded. To use the functions in the package, we need to load it with the `library()` function.
+```{r}
+library(ggplot2)
+```
+Notice that we had to use quotation marks in the `install.package()` function, but not in the `library()` functions. R is just like that sometimes. Anyway, nothing happened, but we can now plot things with functions in `ggplot2`. The simplest function is `qplot()`.
+```{r}
+qplot(x=e, y=f)
+```
+
+### Putting it all together: working with data
+So now that we have the basics, let us play with some simple data to see how things all work together. First, let us enter the data. You may want to just copy and paste this.
+```{r}
+# light intensity in µE per m2 per second
+Light <- c(20, 20, 20, 20, 21, 24, 44, 60, 90, 94, 101)  
+# maximum growth rate of the green alga Chlorella vulgaris
+rmax <- c(1.73, 1.65, 2.02, 1.89, 2.61, 1.36, 2.37, 2.08, 2.69, 2.32, 3.67) 
+```
+These data represent the maximum growth rate of a green alga under various light intensities. How would you expect these to be related?
+
+We can get some summary information on each variable.
+```{r}
+# calculate means
+summary(Light)
+summary(rmax)
+```
+Plotting the data is also recommended
+```{r}
+# plot rmax versus light
+qplot(x=Light, y=rmax)
+# add labels
+qplot(x=Light, y=rmax, xlab = "Light intensity")
+```
+
+So it looks like rmax increases with light intensity. Is this relationships strong? Significant? We can fit a simple linear regression to this plot with the `geom_smooth()` function added to the plot. (Note: this way of building up a plot by layers is unique to `ggplot2` and is not used in the rest of R, so be sure to keep them separate.)
+```{r}
+qplot(x=Light, y=rmax, xlab="Light intensity") + geom_smooth(method="lm")
+```
+(You might also try to see what happens if you do not specify `method="lm"`.)
+
+OK, so there is a postive, apparently linear relationship. But it is significant? We will fit a linear regression to the data using the `lm()` function. We use the formula notation of `y ~ x`, which can be read as y by x. 
+```{r}
+# get the regression line
+lm1 <- lm(rmax ~ Light)
+lm1
+```
+Notice that we do not get a whole lot out of the regression by itself, just the coefficients. To get the rest of the statitics we need to use the `summary()` function on the regression object, `lm1`. 
+```{r}
+summary(lm1)
+```
+There we go, the full regression statistics we're used to seeing. Spend a bit of time working your way through the output to be sure you see what you expect and know what things are. 
+
+You can also get an ANOVA table from any linear model with the `anova()` function. 
+```{r}
+anova(lm1)
+```
+Note that `anova()` just computes the ANOVA table for a fitted model (i.e., the results of `lm()` ).
+
+You can get standard diagnostic plots for most linear models with the `plot()` function (not `qplot()`). 
+```{r}
+plot(lm1) # diagnostic plots
+```
+
+You will see that observation 11 seems to have a lot of influence (Cook's distance > 1, high residual deviance). It might be worth seeing if our results hold up if we remove this observation. We can use our subsetting wizardry to make this easy.
+```{r}
+lm2 <- lm(rmax[-11] ~ Light[-11])
+summary(lm2)
+```
+Yup, the slope is reduced and is no longer significant when this observation is removed. So if this were real data, you would need to think about whether it was real or in error. But let us end by 
+
+# Homework: try it on your own
+Here are some data from Bolker's book showing the functional response of predators to Reed frog tadpole density. We are interested in knowing how predation rates increase with tadpole density. In this dataset, "Initial" is the initial density and "Killed" is the number of tadpoles killed by the predator.
+```{r}
+Initial <- c(5, 5, 10, 10, 15, 15, 20, 20, 30, 30, 50, 50, 75, 75, 100, 100)
+Killed <- c(1, 2, 5, 6, 10, 9, 7, 10, 11, 15, 5, 21, 32, 18, 25, 35)
+```
+
+Using these data:
+
+1.  plot the number killed against the initial density.
+2.  add a smoothed regression line (the default for geom_smooth)
+3.  add a best-fit regression line
+4.  plot the predation rate (=killed/initial density) against the initial density.
+5.  determine whether the predation rate (=killed/initial density) statistically changes with density
+
+```{r, echo=FALSE, eval=FALSE}
+#1
+qplot(x=Initial, y=Killed)
+#2
+qplot(x=Initial, y=Killed) + geom_smooth()
+#3
+qplot(x=Initial, y=Killed) + geom_smooth(method="lm")
+#4
+
+qplot(x=Initial, y=Killed/Initial) + geom_smooth(method="lm")
+#5
+lm.pred <- lm(Killed/Initial ~ Initial)
+summary(lm.pred)
+```
+

@@ -120,7 +120,7 @@ pbinom(q = 2, size = 15, prob = 0.15)
 sum(dbinom(x=0:2, size = 15, prob = 0.15)) 
 ```
 
-A plot can illsutrate what cummualative probability distribution looks like.
+A plot can illustrate what cumulative probability distribution looks like.
 ```{r pbinom, fig.width=5, fig.height=4}
 qplot(x, y = pbinom(q = x, size = 15, prob = 0.15), ylim = c(0,1), xlab = "number of successes", ylab = "cummulative probability")
 # Or alternatively, with vertical lines, like a histogram

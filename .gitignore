@@ -5,11 +5,11 @@
 .png
 .pdf
 figure/
-.md
-.html
+*.md
+*.html
 Lab2_KnowYourData.html
 Lab5_SimulationAndPower.md
-*.md
+*.[md]
 Lab2_KnowYourData.md
 Lab3_DeterministicFunctions.html
 Lab3_DeterministicFunctions.md
@@ -25,3 +25,6 @@ StochasticDistributionsExamples.html
 Lab8_StandardStatsRevisited.html
 Lab6.5_WholeEnchilada_Analysis.html
 Lab6.5_WholeEnchilada.html
+Lab1_IntroToR.pdf
+cache
+lab1-old.pdf
