@@ -1,0 +1,241 @@
+---
+title: 'Fitting models to data part 1: by eye & sums of squares'
+author: "Jesse Brunner"
+date: "February 2, 2015"
+output: html_document
+---
+
+Our goals in this lab are to learn to fit models to data 
+
+1. graphically, tweaking parameters by hand until they "look right"
+2. using sums of squares as a criterion of fit
+3. automating the minimizing of sums of squares
+
+Fitting functions by eye
+------------------------
+
+We are going to start with the reed frog (_Hyperolius spinigularis_) predation data, specifically the functional response of the predator, _Typopsilopa_ fly larvae, to increasing prey densities (Vonesh and Bolker 2005), which you've already seen because it follows a relatively simple form and has few observations. 
+
+First, you need to read in the `ReedfrogFuncresp` data. While normally you will have data in a `*.csv` file or the equivalent, the data sets Bolker uses can be found in his `emdbook` package. Data from a package are read in with the `data()` function. 
+
+```{r rf_loaddata, fig.height=4, fig.width=6}
+library(emdbook)
+data(ReedfrogFuncresp)
+summary(ReedfrogFuncresp)
+library(ggplot2)
+p <- qplot(Initial, Killed, data=ReedfrogFuncresp)
+p
+```
+
+So, as we would expect, with higher densities of prey, the "kill rate" (number of prey killed per predator per duration of the experiment) increases. Our job, then, is to see how each of the functional responses, type I--III, fit the data. (Note: if you read the original paper you'll note that the experiment does not conform perfectly to the normal experimental design used to estimate handling time and attack rates---they used 3 predators in each tank and ran the experiment for 14d, which leads to prey depletion---but for our purposes we'll just gloss over these details.)
+
+Let's see those forms again: 
+
+**Holling Type I**
+$$
+\begin{aligned}
+\text{attack rate} & = \alpha N_{prey}
+\end{aligned}
+$$
+**Holling Type II**
+$$
+\begin{aligned}
+attack rate & = \frac{\alpha N_{prey}}{1 + \alpha N_{prey} h} 
+\end{aligned}
+$$
+
+**Holling Type III**
+$$
+\begin{aligned}
+attack rate & = \frac{\alpha N_{prey}^c}{1 + \alpha N_{prey}^c h} 
+\end{aligned}
+$$
+
+Let's begin with the Type I, which should be pretty easy to work with. 
+```{r HollingI, fig.height=4, fig.width=6}
+holling1 <- function(x, alpha=1){ alpha*x }
+p + stat_function(fun=holling1, geom="line", args=list(alpha=1))  
+```
+
+OK, we were able to plot our line against the data, but clearly we missed the data by a lot. Let's see if we can't get a reasonable estimate of the slope from the actual data. Look, for instance, at the density of 25. The number killed is maybe 10, so let's try that
+
+```{r HollingI_2, fig.height=4, fig.width=6}
+p + stat_function(fun=holling1, geom="line", args=list(alpha=10/25))  
+```
+
+Better, but we're definitely missing the points at a higher density. Try playing with parameters to get the best fit you can. Then let's move on to the Type II & III responses. Here is what I got (yes, I am leaving it to you to construct the code and estiamte the parameters): 
+
+```{r HollingIII, fig.height=4, fig.width=6, echo=FALSE}
+holling2 <- function(x, alpha=1, h=1){ alpha*x/(1+alpha*x*h) }
+holling3 <- function(x, alpha=1, h=1, c=1){ alpha*(x^c)/(1+alpha*(x^c)*h) }
+
+p + stat_function(fun=holling1, geom="line", args=list(alpha=10/25), aes(color="Holling I")) + 
+	stat_function(fun=holling2, geom="line", args=list(alpha=10/20, h=1/70), aes(color="Holling II")) + 
+	stat_function(fun=holling3, geom="line", args=list(alpha=4/30, h=1/38, c=1.5), aes(color="Holling III"))
+```
+
+I was happy to get the general shape of the data, but how do we know how well we are doing in terms of fit? Is the Holling III a better fit to the data than the Holling II? We need a metric! 
+
+Sums of squares as a metric of fit
+----------------------------------
+
+We have all used sums of square differences (SS) to fit (generally linear) models to data, but it is worth being reminded of what they look like.  
+
+$$ SS = \Sigma (observed - expected)^2 $$
+
+In words, it is just the difference between your observation and the prediction (i.e., your line), squared. Large differences influence SS a lot more than small difference because they are squared. This means, for example, that the big difference between the lower point at the initial denisty of 50 is probably going to count a lot to the SS of each line. 
+
+It is pretty straightforward to code the sums of squares.
+```{r SS}
+SS <- function(obs, exp){ sum( (obs-exp)^2 ) }
+```
+
+So let's take our predictions from the type I model and our observations and calculate the sums of squares. 
+```{r SS_I}
+SS(obs=ReedfrogFuncresp$Killed, exp=holling1(x=ReedfrogFuncresp$Initial, alpha=10/25) )
+```
+
+Make sure you understand what we just fed into our `SS()` function. Does the argument to `exp` in the call make sense? Can we improve our SS model fit? Try tweaking the values of alpha a bit. Can you do better than our eye did?
+
+```{r SS_I_2, echo=FALSE,results='hide'}
+SS(obs=ReedfrogFuncresp$Killed, exp=holling1(x=ReedfrogFuncresp$Initial, alpha=8/25) )
+```
+
+Clearly doing this by hand is tedious and awkward. Let's find some more automated ways to do this. First, we will create a new function that takes our data and an estimate of alpha and returns the SS. (This may seem redundant, but it will help us if we have a function...trust me.)
+
+```{r SS_I_3}
+SS.I <- function(alpha, x, y){
+	preds <- holling1(x=x, alpha=alpha) # calculate predictions
+	SS(obs=y, exp=preds) # get sums of squares from them
+}
+
+# Try it out... does it give us the result we expect?
+SS.I(alpha=9/25, x=ReedfrogFuncresp$Initial, y=ReedfrogFuncresp$Killed)
+```
+
+So now with this function in hand, we can _see_ how SS changes with values of alpha. We'll crate a vector of values of alpha and then calculate the SS for each. Note, we are using a for-loop. These are not terribly efficient in R, but they can be done. 
+
+```{r SS_I_plot, fig.height=4, fig.width=6}
+alphas <- seq(from=5/25, to=12/25, length=50) # a vector of alpha values
+ss <- numeric(50) # create an emply numeric vector with 50 elements
+
+# loop through each element of alphas, calculate the SS, 
+# and put it in the right place in ss
+for(i in 1:50){ ss[i] <- SS.I(alpha=alphas[i], 
+								x=ReedfrogFuncresp$Initial, 
+								y=ReedfrogFuncresp$Killed) 
+								} 
+
+qplot(x=alphas, y=ss, geom="line") # plot the SS as a function of alpha
+```
+
+Instead of looping, we can "apply" a function over all of the elements in the vector, `alpha`. This is in general a better approach in R. It is usually faster (although in this case it hardly matters) and is more in keeping with how R works. The alternative to our loop is then:
+```{r SS_I_sapply}
+ss <- sapply(alphas, FUN = SS.I, x=ReedfrogFuncresp$Initial, y=ReedfrogFuncresp$Killed)
+```
+Note that we are applying the function (`FUN=SS.I`) to each element in `alphas`. Because of the way `sapply()` works we need to make sure that the parameter we are cycling over (values of alpha) are the first argument that the function takes (i.e., we couldn't have `alpha` be after `x` and `y` in our definition of `SS.I()`). We can then provide other arguments to the function after telling it which function to use.  
+
+So it looks like we get a minimum value of SS when alpha is a bit above 0.3. Of course we usually want something more precise than what we read off the graph. So let's make one more step in sophisitication; let's use a function to try values of our parameter, alpha, until it reaches a minimum of our response (here, SS). 
+
+Optimizing fit with optim()
+---------------------------
+
+Our goal, of course, is to find an automated way to find the paramter values (here, alpha) that minimizes the sums of squares and is thus the best fit. There are actually several optimization (or minimization) functions, but one of the handiest is `optim()`. It requires a function that returns some value to be minimized (here, the sums of squares) and a vector of initial values of parameters to be optimized over (here, just alpha). It can also take other arguments to be passed to the function (here, x and y). 
+```{r SS_I_optim}
+optim(fn=SS.I, par=c(alpha=0.5), x=ReedfrogFuncresp$Initial, y=ReedfrogFuncresp$Killed) 
+```
+
+First, you'll notice that we got a warning message about the default method, Nelder-Mead, not being reliable for one-dimensional optimization. We can change the method with `..., method="Brent", lower=0.1, upper=1`, providing reasonable lower and upper bounds. Try plugging that in and seeing if it works better.
+
+```{r SS_I_optim2, echo=FALSE, eval=FALSE}
+optim(fn=SS.I, par=c(alpha=0.5), x=ReedfrogFuncresp$Initial, y=ReedfrogFuncresp$Killed,
+			method="Brent", lower=0.1, upper=1) 
+```
+
+So the ouput is not at first obvious. `$par` is the value of the parameter that minimizes the sums of squares, `$value` is the actual minimal value of the sums of squares, and `$convergence` is `0` if it actually converged on a reliable solution; it will be otherwise if not. Check the help file for more guidance. 
+
+So it looks like `optim()` found a best-fit solution with a minimum sums of square = 404.57 when $\alpha=0.318$. Try plotting this against the data and see how it looks.  
+
+```{r SS_I_optim_plot, fig.height=4, fig.width=6, echo=FALSE}
+p + stat_function(fun=holling1, geom="line", args=list(alpha=0.318)) 
+```
+
+-------------------------
+
+It can also be illuminating to see how the residual variation looks relative to the predicted values or the predictor variable itself (here it doesn't matter). 
+```{r, fig.height=4, fig.width=6}
+with(ReedfrogFuncresp, 
+		 {preds <- holling1(Initial, alpha=0.318)
+		  resids <- Killed - preds
+		  qplot(Initial, resids) + geom_hline(yintercept=0)
+		 })
+```
+
+(Notice how we used the curly brackets to do more than one thing in the `with()` function? Notice, too, that each command in the curly brackets needs to be on its own line.)
+
+It is pretty clear that we are underpredicting the kill rate at low densities and that the observations at high densities are quite variable around the predicted line. Here is a thought: could we do better if we allowed our model to have a y-intercept? Right now it is forced to go through (x=0, y=0). To see, let's skip some of the mechanics we've just used (although they would give the exact same answer) and use the built-in `lm()` function for a linear regression. First, let us fit a linear regression and see how it fits, overall.   
+
+```{r}
+m1 <- lm(Killed~Initial, data=ReedfrogFuncresp)
+summary(m1)
+```
+
+Not bad, but our metric was the sum of squared deviations, right? It takes a bit of poking around to find them, but here is the SS:
+```{r}
+sum(m1$residuals^2)
+```
+What was the SS of our previous model, the one without an intercept? We can quickly re-fit it (and also make sure that our code, above, was working) using the `lm()` function. here, the `-1` means "no intercept."
+```{r}
+m0 <- lm(Killed~Initial-1, data=ReedfrogFuncresp)
+sum(m0$residuals^2)
+```
+So we see that there is a difference of `r round(sum(m0$residuals^2)-sum(m1$residuals^2), 0)` in the sums of squares between the two models. It's a better fit, right? Well, you might have noticed that the intercept of the `m1` model was _not_ significantly different from zero, which is a hint. We can also do a quick likelihood-ratio test (more on this in several weeks) with
+```{r}
+anova(m0,m1)
+```
+which suggests that the model with the intercept is not significantly better than the one without. But even if it were, what would that mean? A positive intercept would mean that there was some kill rate even without any prey around! It would be a pretty silly model, even if it were a better fit. In other words, parameters do mean something. 
+
+-------------------
+
+Back to the models we had initially specified. The next step is to fit the Holling type II and III models to the data. I am going to walk you through the type II fitting because a) I'm not a especially cruel and b) there is a bit of a trick here. You see, `optim()` can only pass a single vector of parameters to optimize over. With the type II function we have _two_ variables that we want to optimize over. So we need to make our `SS.II()` function accept a vector of parameters and then use the elements in this vector in our call to `holling2()` to get the predicted values, given those parameters.
+
+```{r SS_II}
+SS.II <- function(pars, x, y){
+	preds <- holling2(x=x, alpha=pars["alpha"], h=pars["h"]) # calculate predictions
+	SS(obs=y, exp=preds) # get sums of squares from them
+}
+				
+optim(fn=SS.II, par=c(alpha=0.5, h=0.025), 
+			x=ReedfrogFuncresp$Initial, y=ReedfrogFuncresp$Killed) 
+```
+
+Make sure you see how this works. `optim()` sends a vector of parameters (`par`) to the function we specific (`SS.II()`). That function takes these parameters and uses the elements (`pars["alpha"]` and `pars["h"]`) to calculate the predictions and sum of squares. 
+
+So we get an attack rate of 0.455 and a handling time of 0.0122 (which equates to the kill rate saturating at about 80 kills per unit time, right?). It it is worth noting that the SS = 366.9, which is certainly better than the 404.6 for the type I model, but is it that much better? We'll come back to this in a few weeks, but note that $SS_{Type II} > SS_{linear regression}$, which suggests it might not be that much better after all, at least by this one criterion, even though it _looks_ better.
+
+Now that you have the basics, try fitting the Holling type III to these data. Be sure to notice what value the "best fit" parameters take on. Do they make sense?
+
+```{r SS_III, echo=FALSE, results='hide'}
+SS.III <- function(pars, x, y){
+	preds <- holling3(x=x, alpha=pars["alpha"], h=pars["h"], c=pars["c"]) # calculate predictions
+	SS(obs=y, exp=preds) # get sums of squares from them
+}
+				
+optim(fn=SS.III, par=c(alpha=0.5, h=0.025, c=1.1), 
+			x=ReedfrogFuncresp$Initial, y=ReedfrogFuncresp$Killed) 
+```
+
+
+```{r SS_III_plot, fig.height=4, fig.width=6, echo=FALSE}
+p + stat_function(fun=holling1, geom="line", aes(color="Holling I"), 
+									args=list(alpha=0.318)) +
+	stat_function(fun=holling2, geom="line", aes(color="Holling II"), 
+								args=list(alpha=0.4555, h=0.01224)) + 
+	stat_function(fun=holling3, geom="line", aes(color="Holling III"),
+								args=list(alpha=1.39580385, h=-0.02786069, c=0.53546174))
+```
+
+Homework: fitting a function to _your_ data
+-------------------------------------------
+
+Your assignment, should you choose to accept it, is to fit a deterministic function (like the Holling curves we just worked with) to your own data. If you are still struggling to think through what deterministic function is most interesting, then just try one or two and see how it works. I would like you to submit a figure of your fitted function and your data with a caption explaining what the points and lines represent.

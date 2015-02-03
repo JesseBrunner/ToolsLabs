@@ -1,12 +1,16 @@
-Deterministic functions: EMD chapter 3
-========================================================
-_Adapted from a lab by Jacqui Frair & John Stella (2011), which was adapted from one by Jesse Brunner (2009) with additional metrials from Ben Bolker (2005)._
+---
+title: 'Getting a feel for deterministic functions: EMD chapter 3'
+author: "Jesse Brunner (with material from Jacqui Frair & John Stella)"
+date: "January 26, 2015"
+output: html_document
+---
+
 
 Our goals in this lab are to: 
 
 1. get a feel for a suite of important deterministic functions, seeing how their parameters changer their shapes and behavior
 2. create reference figures that you can refer to when using these functions
-3. learn to create your own function
+3. learn to create your own function representing the model that _you_ want
 
 Creating functions: the negative exponential
 --------------------------------------------
@@ -19,23 +23,29 @@ $$
 $$
 
 The basic syntax of any function is:
-```{r NegExp.1, eval=FALSE}
-FunctionName <- function() {}
+```{r NegExp_1, eval=FALSE}
+FunctionName <- function() {
+	
+}
 ```
 
 The stuff inside the parentheses is list of "arguments" that the function takes (or requires). The negative exponential function requires one or more $x$-values, as well as two parameters, $a$ and $b$. 
-```{r NegExp.2, eval=FALSE}
-NegExp <- function(x, a, b) {}
+```{r NegExp_2, eval=FALSE}
+NegExp <- function(x, a, b) {
+	
+}
 ```
 
 The stuff inside the curly brackets is the heart of the function, the part that does something. In our case, it does the math:
-```{r NegExp.3}
-NegExp <- function(x, a, b) {a*exp(-b*x)}
+```{r NegExp_3}
+NegExp <- function(x, a, b) {
+	a*exp(-b*x)
+}
 ```
-It is worth noting that by default the last value that is calculated in a function is "returned". In this case, it means that the value of `a*exp(-b*x` is returned. In more complex functions, it is worth being explicit about what it returned. You can do this with the `return()` function, as so:
+It is worth noting that by default the last value that is calculated in a function is "returned". In this case, it means that the value of `a*exp(-b*x)` is returned. We'll return to this in a moment. 
 
 Let's try this function and see how it works. First, let's create a sequence of $x$-values, then we will plug them into our `NegExp()` function. 
-```{r NegExp.call}
+```{r NegExp_call}
 x <- seq(from = 0, to = 10, length = 50)
 y <- NegExp(x, a = 1, b = 1)
 y
@@ -43,76 +53,95 @@ y
 
 Right. So we feed our function a vector of x-values and it spits out a vector of y-values, which, at first glance, seem to be about right. Let’s plot it and see.
 
-```{r NegExp.plot, fig.width = 5, fig.height = 4}
+```{r NegExp_plot, fig.width = 5, fig.height = 4}
 library(ggplot2) #don't forget to load the package
 qplot(x,y, geom = "line")
 ```
 
 It works! Whoo hoo! Your first function! 
+	
+	Now, we can make two important changes. First, we can provide default, but override-able values to the arguments of a function. This is good practice because a) it lets you specify _just_ the thing(s) you want to change and b) there are built in "reasonable" values. It’s good to get in the habit.
 
-Now, we can make two important changes. First, we can provide default, but override-able values to the arguments of a function. This is good practice because a) it lets you specify _just_ the thing(s) you want to change and b) there are built in "reasonable" values. It’s good to get in the habit.
-
-```{r NegExp.4, fig.width = 5, fig.height = 4}
+```{r NegExp_4, fig.width = 5, fig.height = 4}
 NegExp <- function(x, a = 1, b = 1) {a*exp(-b*x)}
 y.1 <- NegExp(x) # using default values
 qplot(x, y.1, geom = "line")
 y.2 <- NegExp(x, b=1/3) # using default value of a, but changing b
 qplot(x, y.2, geom = "line")
-
 ```
 
-The other thing to note, as I mentioned before, is that our function is returning a vector of values. We'll see later that a function can do a whole bunch of things, but it can only return one object (a vector, a matrix, a list...).  
-By default a function returns the result of the last calculation, but with more complicated functions it is good practice to specify the thing you want returned by using `return(ThingToReturn)`. So in our case we would write:
-```{r NegExp.5}
+The other thing to note, as I mentioned before, is that our function is returning a vector of values. We'll see later that a function can do a whole bunch of things, but it can only return one object (a vector, a matrix, a list...). By default a function returns the result of the last calculation, but with more complicated functions it is good practice to specify the thing you want returned by using `return(ThingToReturn)`. So in our case we would write:
+```{r NegExp_5}
 NegExp <- function(x, a = 1, b = 1) {
-  y <- a*exp(-b*x)
-  return(y)
-  }
+y <- a*exp(-b*x)
+return(y)
+}
 ```
 And there you go; you're first fully developed function in R!
-
-_________
-### A few notes on functions:
-
-* Functions can have 0, 1, 2, or many inputs in the parentheses. These may be any type of object or data such as character strings, TRUE/FALSE, vectors of numbers, matrices, data frames, lists.
-* Functions can only return __1__ things, although it can be complex (e.g., an object, data frame, matrix). It is good practice to make the last statment of your function be a `return()`
-	* While a function can plot or print things out, the returned object/data is the only thing that can be assigned to a variable or worked with afterwards
-* You may create new variables within a function (e.g., `y` in the `NegExp()` function above) but that variable exists only within the function. This is a _good_ thing. Imagine if you called a function that had an interval variable called `y` that _overwrote_ the variable `y` you had in your workspace! It would be dangerous working with unknown functions! This way you don't need to pay attention to the internal workings of any given function.
-	* It is possible to have a function create or change a "global" variable by using the double-arrow assignment symbol  "`<<-`""  instead of the normal  "`<-`"" . Beware.
 	
-_________
+------------------
+
+**Side Note:** One thing to note is that we have a `y` inside the function, which is returned, and a `y` outside the function, which is was we call the output from our function. These are different things. The `y` inside the function _does not exist_ outside of the function. We could call it anything and so long as it was consistent inside the function, it would work just fine. Similarly, we could name the resulting output of our function anything we want (within the naming rules of R) and we'll be fine. And just to be complete (if silly), we could _give_ our function a variable called `y` (e.g., `NegExp(x, a = y, b = 1)`) and it wouldn't matter. The function would know what we meant (i.e., it would simply take the value in `y` and assign it to an internal variable named `a` and then use that... it wouldn't "know" anything about what those values were called outside of itself). This might all seem a bit confusing, but it is important to note how _useful_ this is.  It means that you don't need to know what the inside of a function looks like to use! For instance, you've used `summary()` a whole bunch of times, right? Do you have to worry that you don't give it a variable name that is uses for its own purposes internally? No! That makes our life much easier.   
+
+------------------
+
+### A few things to remember about functions:
+
+* Functions can have 0, 1, 2, or many inputs in the parentheses. These may be any type of object or data such as character strings, TRUE/FALSE, vectors of numbers, matrices, data frames, lists.  
+
+* Functions can only return __1__ things, although it can be complex (e.g., an object, data frame, matrix). It is good practice to make the last statment of your function be a `return()`.  
+
+* While a function can plot or print things out, the returned object/data is the only thing that can be assigned to a variable (i.e., the only thing you can work with afterwards).  
+
+* You may create new variables within a function (e.g., `y` in the `NegExp()` function above) but that variable exists only within the function. This is a _good_ thing. Imagine if you called a function that had an interval variable called `y` that _overwrote_ the variable `y` you had in your workspace! It would be dangerous working with unknown functions! This way you do not need to pay attention to the internal workings of any given function.  
+
+* It is possible to have a function create or change a "global" variable by using the double-arrow assignment symbol `<<-`  instead of the normal  `<-` . This can be powerful, but Be Very Careful!  
 
 
-Plotting curves with `stat_function()`
---------------------------------------
-Instead of generating a vector of x-values, calculating y-values, and then plotting them against each other, we can use the built‐in `stat_function()` of the ggplot2 package. It is designed for just this purpose.
+### Two bits of advice: 
 
+1.  While a single function can do lots of things---reorganize your data, calculate, some statistics, plot the results, and then send you back a table of something important---it is generally better to have a function do one thing and one thing only. This gives you the flexiblity to re-use those single-function functions in new ways, or string together functions in new ways that maybe you never thought of before. Thing of functions as Legos, that you can combine in useful structures. You will start to get the hang of this, and how to make your functions more general, but for now, just keep it simple and understandable. And make a file of useful functions that you can crib or steal from later.  
+
+2.  There are a number of methods for trouble-shooting functions. The simplest is to just walk through what a function is doing, step-by-step. In fact you would do well to build up a function slowly, making sure you know how it's working along the way. The tendancy is to write a function from start to finish, try it, and then say "It doesn't work!" Then you have trouble. Instead, write a function that does the first thing  you need it do. Does that work? If so, move on to the next thing. You can use the `print()` or `paste()` functions to see what different variables look like in the function, too. 
+
+
+Plotting curves with stat_function()
+------------------------------------
+
+We ended the last section by generating a vector of x-values, then using our function to calculate corresponding y-values, and then plotting them against one another. Instead we can do this in one step by using the built-in `stat_function()` of the ggplot2 package. It is designed for just this purpose.
 We can plot any function we like, such as this one:
-```{r madeup.stat_fun, fig.width = 5, fig.height = 4}
+```{r madeup_stat_fun, fig.width = 5, fig.height = 4}
 qplot(x=c(0,5), stat="function", fun=function(x)  10*(1 -exp(-2*x) -1/30*x^2), geom="line")
 ```
 
-Or use named functions, like our `NegExp()` function (or anything else built into R).
-```{r NegExp.stat_fun, fig.width = 5, fig.height = 4}
+Or use named functions, like our `NegExp()` function (or anything else built into R).																																																																																																																																																																																																																																																																																																																																																												
+```{r NegExp_stat_fun, fig.width = 5, fig.height = 4}
 qplot(x=c(0,10), stat="function", fun=NegExp, geom="line")
 ```
 
-If we want to plot more than one curve on the same axes, we need to use the `ggplot()` version of things, rather than `qplot()`. We are assigning color to different character strings in the `aes()` part, so that the function knows to create entries in a legend for each with the appropriate colors. We then have to specify values of the colors and the breaks within the `scale_colour_manual()` function. Note that the names are assigned alphabetical, so even though "`a=0.5, b=1`" is the last entry, it gets the first color listed (here, darkgreen).
+Notice that we did not say `fun=NegExp(x, a, b, c)` or something similar. ggplot2 just wants to know the name of the function. If we want to specify arguments to the function (e.g., change the value of `a`) we can use `args=list()` such as:
+```{r NegExp_stat_fun_args, fig.width = 5, fig.height = 4}
+qplot(x=c(0,10), stat="function", fun=NegExp, args=list(a=3), geom="line")
+```
 
-```{r guide.NegExp}
-NE <- ggplot(data.frame(x=c(0,10)), aes(x)) +   
-stat_function(fun=NegExp, geom="line", args = list(a=1, b = 0.5), aes(colour="a=1, b=0.5")) +   
-stat_function(fun=NegExp, geom="line", args = list(a=1, b = 1), aes(colour="a=1, b=1")) +   
-stat_function(fun=NegExp, geom="line", args = list(a=1, b = 2), aes(colour="a=1, b=2")) +   
-stat_function(fun=NegExp, geom="line", args = list(a=1/2, b = 1), aes(colour="a=0.5, b=1")) +   
-scale_colour_manual("Parameters", values=c("darkgreen", "lightblue","blue","darkblue"), breaks=c("a=1, b=0.5", "a=1, b=1", "a=1, b=2", "a=0.5, b=1")) +   
-labs(title = "Negative Exponential") + theme_bw()
-
+If we want to plot more than one curve on the same axes, we need to use the `ggplot()` version of things, rather than `qplot()`. We are assigning color to different character strings in the `aes()` part, so that the function knows to create entries in a legend for each with the appropriate colors. We then have to specify values of the colors and the breaks within the `scale_colour_manual()` function. Note that the names are assigned alphabetical, so even though "`a=0.5, b=1`" is the last entry, it gets the first color listed (here, red).
+```{r guide_NegExp}
+NE <- ggplot(data.frame(x=c(0,10)), aes(x)) +  
+	stat_function(fun=NegExp, geom="line", args=list(a=1, b = 0.5), aes(colour="a=1, b=0.5")) +  
+	stat_function(fun=NegExp, geom="line", args=list(a=1, b = 1),   aes(colour="a=1, b=1")) +   
+	stat_function(fun=NegExp, geom="line", args=list(a=1, b = 2),   aes(colour="a=1, b=2")) +  
+	stat_function(fun=NegExp, geom="line", args=list(a=1/2, b = 1), aes(colour="a=0.5, b=1")) +  
+	scale_colour_manual("Parameters", 
+		values=c("red", "lightblue", "blue", "darkblue"), 
+		breaks=c("a=1, b=0.5", "a=1, b=1",  "a=1, b=2", "a=0.5, b=1")) +   
+	labs(title = "Negative Exponential") + theme_bw()
 NE
 ```
 
+There is a lot embeded in this code, so let me go through it again. First, we're adding several "layers" of `stat_function`, each with different lists of arguments. Then we are assigning a color to a given label (`aes` stands for aesthetics). Finally we specify what colors we want for each label using the `scale_colour_manual()` function. The names of the breaks need to be the same as the names you used above for each label.  (Note, you could simply specify the actualy color you wanted each line to be using `stat_function(..., colour="red")`, but then we wouldn't get the legend with the specific parameters.)
+
 I think that this sort of figure is a handy reference. You may want to turn this into a pdf and keep it handy or print it out. It's relatively easy to do:
-```{r NegExp.pdf, eval=FALSE}
+```{r NegExp_pdf, eval=FALSE}
 ggsave(NE, file="NegativeExponential.pdf", width = 8, height = 6) # width in inches, by default
 ```
 
@@ -123,62 +152,64 @@ You should try to at least understand the behavior of, if not create a similar r
 
 **Hyperbolic**  
 $$
-  \begin{aligned}
-  y & = \frac{a}{b+x} 
-  \end{aligned}
+\begin{aligned}
+y & = \frac{a}{b+x} 
+\end{aligned}
 $$
 
 **Michaelis-Menton**
 $$
-  \begin{aligned}
-  y & = \frac{ax}{b+x} 
-  \end{aligned}
+\begin{aligned}
+y & = \frac{ax}{b+x} 
+\end{aligned}
 $$
 
 **Holling Type III**
 $$
-  \begin{aligned}
-  y & = \frac{ax^2}{b^2+x^2} 
-  \end{aligned}
+\begin{aligned}
+y & = \frac{ax^2}{b^2+x^2} 
+\end{aligned}
 $$
 
 **Holling Type IV**
 $$
-  \begin{aligned}
-  y & = \frac{ax^2}{b+cx+x^2} 
-  \end{aligned}
+\begin{aligned}
+y & = \frac{ax^2}{b+cx+x^2} 
+\end{aligned}
 $$
 
 **Monomolecular**
 $$
-  \begin{aligned}
-  y & = a(1-exp(-bx)) 
-  \end{aligned}
+\begin{aligned}
+y & = a(1-exp(-bx)) 
+\end{aligned}
 $$
 
 **Ricker**
 $$
-  \begin{aligned}
-  y & = ax \times exp(-bx)
-  \end{aligned}
+\begin{aligned}
+y & = ax \times exp(-bx)
+\end{aligned}
 $$
 
 **Logistic**
 $$
-  \begin{aligned}
-  y & = \frac{exp(a+bx)}{1+exp(a+bx)}
-  \end{aligned}
+\begin{aligned}
+y & = \frac{exp(a+bx)}{1+exp(a+bx)}
+\end{aligned}
 $$
-   
 
-These are for your own benefit, so there is no need to send me anything unless you have questions or produce something really cool.
-   
+
+These are for your own benefit, so do them, but there is no need to send me anything unless you have questions or produce something really cool.
+
+
+
 
 ifelse() for Piece-wise Functions 
 --------------------------------
 
 The `ifelse()` command in R is useful for constructing piece-wise functions.  Its basic syntax is `ifelse(condition, value_if_true, value_if_false)`, where `condition` is a logical vector (e.g., `x > 0`), `value_if_true` is a vector of alternatives to use if condition is `TRUE`, and `value_if_false` is a vector of alternatives to use if condition is `FALSE`.  If you specify just one value, it will be expanded (recycled in R jargon) to be the right length.  A simple example:
-```{r ifelse.example}
+```{r ifelse_example}
 x <- c(-25, -16, -9, -4, -1, 0, 1, 4, 9, 16, 25)
 ifelse(x < 0, 0, sqrt(x))
 ```
@@ -192,15 +223,26 @@ Here are some examples of using `ifelse()` to generate
 3. a more complicated piece-wise model that grows exponentially and then decreases linearly   
 4. a double-threshold model   
 
-```{r ifelse.plots}
+```{r ifelse_plots}
 
-ggplot(data.frame(x=c(0,5)), aes(x)) +   
-stat_function(fun=function(x) ifelse(x < 2, 1/2, 2), geom="line", aes(colour="ifelse(x < 2, 1/2, 2)")) +   
-stat_function(fun=function(x) ifelse(x < 2, 2 * x, 4), geom="line", aes(colour="ifelse(x < 2, 2 * x, 4)")) +   
-stat_function(fun=function(x) ifelse(x < 2, exp(x), 7*exp(-(x-2)/4)), geom="line", aes(colour="ifelse(x < 2, exp(x), 7*exp(-(x-2)/4))")) +   
-stat_function(fun=function(x) ifelse(x < 2, 1, ifelse(x < 4, 3, 5)), geom="line", aes(colour="ifelse(x < 2, 1, ifelse(x < 4, 3, 5))")) +   
-scale_colour_manual("Piecewise model", values=c("violet", "blue","darkblue","lightblue"), breaks=c("ifelse(x < 2, 1/2, 2)", "ifelse(x < 2, 2 * x, 4)", "ifelse(x < 2, exp(x), 7*exp(-(x-2)/4))", "ifelse(x < 2, 1, ifelse(x < 4, 3, 5))")) + theme_bw() +   
-	theme(legend.position=c(0,1), legend.justification=c(0,1), legend.background = element_blank())
+ggplot(data.frame(x=c(0,5)), aes(x)) + 
+stat_function(fun=function(x) ifelse(x < 2, 1/2, 2), geom="line", 
+							aes(colour="ifelse(x < 2, 1/2, 2)")) +   
+stat_function(fun=function(x) ifelse(x < 2, 2 * x, 4), geom="line", 
+							aes(colour="ifelse(x < 2, 2 * x, 4)")) +   
+stat_function(fun=function(x) ifelse(x < 2, exp(x), 7*exp(-(x-2)/4)), geom="line", 
+							aes(colour="ifelse(x < 2, exp(x), 7*exp(-(x-2)/4))")) +   
+stat_function(fun=function(x) ifelse(x < 2, 1, ifelse(x < 4, 3, 5)), geom="line", 
+							aes(colour="ifelse(x < 2, 1, ifelse(x < 4, 3, 5))")) +   
+scale_colour_manual("Piecewise model", 
+							values=c("violet", "blue","darkblue","lightblue"), 
+							breaks=c("ifelse(x < 2, 1/2, 2)", 
+											 "ifelse(x < 2, 2 * x, 4)", 
+											 "ifelse(x < 2, exp(x), 7*exp(-(x-2)/4))", 
+											 "ifelse(x < 2, 1, ifelse(x < 4, 3, 5))")) + 
+theme_bw() +   
+theme(legend.position=c(0,1), legend.justification=c(0,1), 
+			legend.background=element_blank())
 
 # Notice that last call to theme(). 
 # I'm specifying the position and justification to move
@@ -211,30 +253,21 @@ scale_colour_manual("Piecewise model", values=c("violet", "blue","darkblue","lig
 # element_blank() is way to "delete" an element
 ```
 
-The double-threshold example (nested `ifelse()` commands) probably needs more explanation.   In words, this command would read “if x is less than 2, set y to 1; otherwise (where x ≥ 2), if x is less than 4 (i.e., 2 ≤ x < 4), set y to 3; otherwise (where x ≥ 4), set y to 5”.        
+The double-threshold example (nested `ifelse()` commands) probably needs more explanation.   In words, this command would read “if x is less than 2, set y to 1; otherwise (where x $\ge$ 2), if x is less than 4 (i.e., 2 $\leq$ x $<$ 4), set y to 3; otherwise (where x $\ge$ 4), set y to 5”.        
 
-   
+
 Homework: Which curve?
 -------------------------
-
-1. On page 96 in EMD, Bolker states that the logistic is popular because it is a simple sigmoid function, but then indicates that its "rational analogue," the Holling Type III functional response is also a simple sigmoid function. Does that mean they are interchangeable? Can you get a Holling type III curve to look like a logistic or vice versa? (Say, from 0 to 10.) If so, under what parameters?
-
-2. What about the hyperbolic and the negative exponential?
+	
+1. On page 96 in EMD, Bolker states that the logistic is popular because it is a simple sigmoid function, but then indicates that its "rational analogue," the Holling Type III functional response is also a simple sigmoid function. Does that mean they are interchangeable? Can you get a Holling type III curve to look like a logistic or vice versa? (Say, from 0 to 10.) If so, under what parameters? What about the hyperbolic and the negative exponential?
 
 Send me one figure for each pair showing me how close you were able to get. Make sure you label your axes, etc., and indicate the parameter combinations you used. Closest fit in the class gets a beer.
 
-Please send me the html file that shows your code and figure in the format `MyName_Lab2.html`
+2. Describe and plot the deterministic function you think would relate your predictor (x-variable) to your response (y-variable). (This likely relates to the data you worked with and plotted last week.) Include a 1-2 sentence caption as you would in a manuscript.
 
-    
-    
-    
-    
----------------
----------------
----------------
----------------
 
-```{r morefunctions}
+
+```{r morefunctions, echo=FALSE, eval=FALSE}
 Hyperbolic <- function(x, a = 2, b = 3) { a/(b+x) }  
 MichMent <- function(x, a = 2, b = 1) { a*x / (b + x) }  
 Holling3 <- function(x, a = 2, b = 1) { (a*x^2) / (b^2 + x^2) }  
@@ -245,92 +278,86 @@ Logistic <- function(x, a = 0, b = 1) { exp(a+b*x) / (1 + exp(a+b*x) ) }
 ```
 
 
-
-
-
-
-
-
-```{r guide.Hyperbolic, echo=FALSE, eval=FALSE}
+```{r guide_Hyperbolic, echo=FALSE, eval=FALSE}
 
 #### NEED TO ADJUST PARAMETES & COLORS
 
 Hyp <- ggplot(data.frame(x=c(0,10)), aes(x)) +   
-stat_function(fun=Hyperbolic, geom="line", args = list(a=1, b = 0.5), aes(colour="a=1, b=0.5")) +   
-stat_function(fun=Hyperbolic, geom="line", args = list(a=1, b = 1), aes(colour="a=1, b=1")) +   
-stat_function(fun=Hyperbolic, geom="line", args = list(a=1, b = 5), aes(colour="a=1, b=5")) +   
-stat_function(fun=Hyperbolic, geom="line", args = list(a=1/2, b = 1), aes(colour="a=0.5, b=1")) +   	stat_function(fun=Hyperbolic, geom="line", args = list(a=5, b = 1), aes(colour="a=2, b=1")) +
-scale_colour_manual("Parameters", values=c("orange", "green","black","darkgreen", "red"), breaks=c("a=1, b=0.5", "a=1, b=1", "a=1, b=5", "a=0.5, b=1", "a=5, b=1")) +   
-labs(title = "Hyperbolic") + theme_bw()
+	stat_function(fun=Hyperbolic, geom="line", args = list(a=1, b = 0.5), aes(colour="a=1, b=0.5")) +   
+	stat_function(fun=Hyperbolic, geom="line", args = list(a=1, b = 1), aes(colour="a=1, b=1")) +   
+	stat_function(fun=Hyperbolic, geom="line", args = list(a=1, b = 5), aes(colour="a=1, b=5")) +   
+	stat_function(fun=Hyperbolic, geom="line", args = list(a=1/2, b = 1), aes(colour="a=0.5, b=1")) +   	stat_function(fun=Hyperbolic, geom="line", args = list(a=5, b = 1), aes(colour="a=2, b=1")) +
+	scale_colour_manual("Parameters", values=c("orange", "green","black","darkgreen", "red"), breaks=c("a=1, b=0.5", "a=1, b=1", "a=1, b=5", "a=0.5, b=1", "a=5, b=1")) +   
+	labs(title = "Hyperbolic") + theme_bw()
 Hyp
 ```
 
-```{r guide.MichMent, echo=FALSE, eval=FALSE}
+```{r guide_MichMent, echo=FALSE, eval=FALSE}
 MM <- ggplot(data.frame(x=c(0,10)), aes(x)) +   
-stat_function(fun=MichMent, geom="line", args = list(a=1, b = 0.5), aes(colour="a=1, b=0.5")) +   
-stat_function(fun=MichMent, geom="line", args = list(a=1, b = 1), aes(colour="a=1, b=1")) +   
-stat_function(fun=MichMent, geom="line", args = list(a=1, b = 5), aes(colour="a=1, b=5")) +   
-stat_function(fun=MichMent, geom="line", args = list(a=1/2, b = 1), aes(colour="a=0.5, b=1")) +   	stat_function(fun=MichMent, geom="line", args = list(a=5, b = 1), aes(colour="a=2, b=1")) +
-scale_colour_manual("Parameters", values=c("orange", "green","black","darkgreen", "red"), breaks=c("a=1, b=0.5", "a=1, b=1", "a=1, b=5", "a=0.5, b=1", "a=5, b=1")) +   
-labs(title = "Michaelis-Menton") + theme_bw()
+	stat_function(fun=MichMent, geom="line", args = list(a=1, b = 0.5), aes(colour="a=1, b=0.5")) +   
+	stat_function(fun=MichMent, geom="line", args = list(a=1, b = 1), aes(colour="a=1, b=1")) +   
+	stat_function(fun=MichMent, geom="line", args = list(a=1, b = 5), aes(colour="a=1, b=5")) +   
+	stat_function(fun=MichMent, geom="line", args = list(a=1/2, b = 1), aes(colour="a=0.5, b=1")) +   	stat_function(fun=MichMent, geom="line", args = list(a=5, b = 1), aes(colour="a=2, b=1")) +
+	scale_colour_manual("Parameters", values=c("orange", "green","black","darkgreen", "red"), breaks=c("a=1, b=0.5", "a=1, b=1", "a=1, b=5", "a=0.5, b=1", "a=5, b=1")) +   
+	labs(title = "Michaelis-Menton") + theme_bw()
 MM
 ```
 
 
-```{r guide.Holling3, echo=FALSE, eval=FALSE}
+```{r guide_Holling3, echo=FALSE, eval=FALSE}
 H3 <- ggplot(data.frame(x=c(0,10)), aes(x)) +   
-stat_function(fun=Holling3, geom="line", args = list(a=1, b = 0.5), aes(colour="a=1, b=0.5")) +   
-stat_function(fun=Holling3, geom="line", args = list(a=1, b = 1), aes(colour="a=1, b=1")) +   
-stat_function(fun=Holling3, geom="line", args = list(a=1, b = 5), aes(colour="a=1, b=5")) +   
-stat_function(fun=Holling3, geom="line", args = list(a=1/2, b = 1), aes(colour="a=0.5, b=1")) +   	stat_function(fun=Holling3, geom="line", args = list(a=5, b = 1), aes(colour="a=2, b=1")) +
-scale_colour_manual("Parameters", values=c("orange", "green","black","darkgreen", "red"), breaks=c("a=1, b=0.5", "a=1, b=1", "a=1, b=5", "a=0.5, b=1", "a=5, b=1")) +   
-labs(title = "Holling Type III") + theme_bw()
+	stat_function(fun=Holling3, geom="line", args = list(a=1, b = 0.5), aes(colour="a=1, b=0.5")) +   
+	stat_function(fun=Holling3, geom="line", args = list(a=1, b = 1), aes(colour="a=1, b=1")) +   
+	stat_function(fun=Holling3, geom="line", args = list(a=1, b = 5), aes(colour="a=1, b=5")) +   
+	stat_function(fun=Holling3, geom="line", args = list(a=1/2, b = 1), aes(colour="a=0.5, b=1")) +   	stat_function(fun=Holling3, geom="line", args = list(a=5, b = 1), aes(colour="a=2, b=1")) +
+	scale_colour_manual("Parameters", values=c("orange", "green","black","darkgreen", "red"), breaks=c("a=1, b=0.5", "a=1, b=1", "a=1, b=5", "a=0.5, b=1", "a=5, b=1")) +   
+	labs(title = "Holling Type III") + theme_bw()
 H3
 ```
 
-```{r guide.Holling4, echo=FALSE, eval=FALSE}
+```{r guide_Holling4, echo=FALSE, eval=FALSE}
 
 ### add in parameter c
 H4 <- ggplot(data.frame(x=c(0,10)), aes(x)) +   
-stat_function(fun=Holling4, geom="line", args = list(a=1, b = 0.5), aes(colour="a=1, b=0.5")) +   
-stat_function(fun=Holling4, geom="line", args = list(a=1, b = 1), aes(colour="a=1, b=1")) +   
-stat_function(fun=Holling4, geom="line", args = list(a=1, b = 5), aes(colour="a=1, b=5")) +   
-stat_function(fun=Holling4, geom="line", args = list(a=1/2, b = 1), aes(colour="a=0.5, b=1")) +   	stat_function(fun=Holling4, geom="line", args = list(a=5, b = 1), aes(colour="a=2, b=1")) +
-scale_colour_manual("Parameters", values=c("orange", "green","black","darkgreen", "red"), breaks=c("a=1, b=0.5", "a=1, b=1", "a=1, b=5", "a=0.5, b=1", "a=5, b=1")) +   
-labs(title = "Holling Type IV") + theme_bw()
+	stat_function(fun=Holling4, geom="line", args = list(a=1, b = 0.5), aes(colour="a=1, b=0.5")) +   
+	stat_function(fun=Holling4, geom="line", args = list(a=1, b = 1), aes(colour="a=1, b=1")) +   
+	stat_function(fun=Holling4, geom="line", args = list(a=1, b = 5), aes(colour="a=1, b=5")) +   
+	stat_function(fun=Holling4, geom="line", args = list(a=1/2, b = 1), aes(colour="a=0.5, b=1")) +   	stat_function(fun=Holling4, geom="line", args = list(a=5, b = 1), aes(colour="a=2, b=1")) +
+	scale_colour_manual("Parameters", values=c("orange", "green","black","darkgreen", "red"), breaks=c("a=1, b=0.5", "a=1, b=1", "a=1, b=5", "a=0.5, b=1", "a=5, b=1")) +   
+	labs(title = "Holling Type IV") + theme_bw()
 H4
 ```
 
-```{r guide.Monomolecular, echo=FALSE, eval=FALSE}
+```{r guide_Monomolecular, echo=FALSE, eval=FALSE}
 Mono <- ggplot(data.frame(x=c(0,10)), aes(x)) +   
-stat_function(fun=Monomolecular, geom="line", args = list(a=1, b = 0.5), aes(colour="a=1, b=0.5")) +   
-stat_function(fun=Monomolecular, geom="line", args = list(a=1, b = 1), aes(colour="a=1, b=1")) +   
-stat_function(fun=Monomolecular, geom="line", args = list(a=1, b = 5), aes(colour="a=1, b=5")) +   
-stat_function(fun=Monomolecular, geom="line", args = list(a=1/2, b = 1), aes(colour="a=0.5, b=1")) +   	stat_function(fun=Monomolecular, geom="line", args = list(a=5, b = 1), aes(colour="a=2, b=1")) +
-scale_colour_manual("Parameters", values=c("orange", "green","black","darkgreen", "red"), breaks=c("a=1, b=0.5", "a=1, b=1", "a=1, b=5", "a=0.5, b=1", "a=5, b=1")) +   
-labs(title = "Monomolecular") + theme_bw()
+	stat_function(fun=Monomolecular, geom="line", args = list(a=1, b = 0.5), aes(colour="a=1, b=0.5")) +   
+	stat_function(fun=Monomolecular, geom="line", args = list(a=1, b = 1), aes(colour="a=1, b=1")) +   
+	stat_function(fun=Monomolecular, geom="line", args = list(a=1, b = 5), aes(colour="a=1, b=5")) +   
+	stat_function(fun=Monomolecular, geom="line", args = list(a=1/2, b = 1), aes(colour="a=0.5, b=1")) +   	stat_function(fun=Monomolecular, geom="line", args = list(a=5, b = 1), aes(colour="a=2, b=1")) +
+	scale_colour_manual("Parameters", values=c("orange", "green","black","darkgreen", "red"), breaks=c("a=1, b=0.5", "a=1, b=1", "a=1, b=5", "a=0.5, b=1", "a=5, b=1")) +   
+	labs(title = "Monomolecular") + theme_bw()
 Mono
 ```
 
 
-```{r guide.Ricker, echo=FALSE, eval=FALSE}
+```{r guide_Ricker, echo=FALSE, eval=FALSE}
 Rick <- ggplot(data.frame(x=c(0,10)), aes(x)) +   
-stat_function(fun=Ricker, geom="line", args = list(a=1, b = 0.5), aes(colour="a=1, b=0.5")) +   
-stat_function(fun=Ricker, geom="line", args = list(a=1, b = 1), aes(colour="a=1, b=1")) +   
-stat_function(fun=Ricker, geom="line", args = list(a=1, b = 5), aes(colour="a=1, b=5")) +   
-stat_function(fun=Ricker, geom="line", args = list(a=1/2, b = 1), aes(colour="a=0.5, b=1")) +   	stat_function(fun=Ricker, geom="line", args = list(a=5, b = 1), aes(colour="a=2, b=1")) +
-scale_colour_manual("Parameters", values=c("orange", "green","black","darkgreen", "red"), breaks=c("a=1, b=0.5", "a=1, b=1", "a=1, b=5", "a=0.5, b=1", "a=5, b=1")) +   
-labs(title = "Ricker") + theme_bw()
+	stat_function(fun=Ricker, geom="line", args = list(a=1, b = 0.5), aes(colour="a=1, b=0.5")) +   
+	stat_function(fun=Ricker, geom="line", args = list(a=1, b = 1), aes(colour="a=1, b=1")) +   
+	stat_function(fun=Ricker, geom="line", args = list(a=1, b = 5), aes(colour="a=1, b=5")) +   
+	stat_function(fun=Ricker, geom="line", args = list(a=1/2, b = 1), aes(colour="a=0.5, b=1")) +   	stat_function(fun=Ricker, geom="line", args = list(a=5, b = 1), aes(colour="a=2, b=1")) +
+	scale_colour_manual("Parameters", values=c("orange", "green","black","darkgreen", "red"), breaks=c("a=1, b=0.5", "a=1, b=1", "a=1, b=5", "a=0.5, b=1", "a=5, b=1")) +   
+	labs(title = "Ricker") + theme_bw()
 Rick
 ```
 
-```{r guide.Logistic, echo=FALSE, eval=FALSE}
+```{r guide_Logistic, echo=FALSE, eval=FALSE}
 Logist <- ggplot(data.frame(x=c(0,10)), aes(x)) +   
-stat_function(fun=Logistic, geom="line", args = list(a=1, b = 0.5), aes(colour="a=1, b=0.5")) +   
-stat_function(fun=Logistic, geom="line", args = list(a=1, b = 1), aes(colour="a=1, b=1")) +   
-stat_function(fun=Logistic, geom="line", args = list(a=1, b = 5), aes(colour="a=1, b=5")) +   
-stat_function(fun=Logistic, geom="line", args = list(a=1/2, b = 1), aes(colour="a=0.5, b=1")) +   	stat_function(fun=Logistic, geom="line", args = list(a=5, b = 1), aes(colour="a=2, b=1")) +
-scale_colour_manual("Parameters", values=c("orange", "green","black","darkgreen", "red"), breaks=c("a=1, b=0.5", "a=1, b=1", "a=1, b=5", "a=0.5, b=1", "a=5, b=1")) +   
-labs(title = "Logistic") + theme_bw()
+	stat_function(fun=Logistic, geom="line", args = list(a=1, b = 0.5), aes(colour="a=1, b=0.5")) +   
+	stat_function(fun=Logistic, geom="line", args = list(a=1, b = 1), aes(colour="a=1, b=1")) +   
+	stat_function(fun=Logistic, geom="line", args = list(a=1, b = 5), aes(colour="a=1, b=5")) +   
+	stat_function(fun=Logistic, geom="line", args = list(a=1/2, b = 1), aes(colour="a=0.5, b=1")) +   	stat_function(fun=Logistic, geom="line", args = list(a=5, b = 1), aes(colour="a=2, b=1")) +
+	scale_colour_manual("Parameters", values=c("orange", "green","black","darkgreen", "red"), breaks=c("a=1, b=0.5", "a=1, b=1", "a=1, b=5", "a=0.5, b=1", "a=5, b=1")) +   
+	labs(title = "Logistic") + theme_bw()
 Logist
 ```
