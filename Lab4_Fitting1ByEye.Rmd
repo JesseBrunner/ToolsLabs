@@ -2,7 +2,7 @@
 title: 'Fitting models to data part 1: by eye & sums of squares'
 author: "Jesse Brunner"
 date: "February 2, 2015"
-output: html_document
+output: pdf_document
 ---
 
 Our goals in this lab are to learn to fit models to data 
@@ -234,6 +234,92 @@ p + stat_function(fun=holling1, geom="line", aes(color="Holling I"),
 	stat_function(fun=holling3, geom="line", aes(color="Holling III"),
 								args=list(alpha=1.39580385, h=-0.02786069, c=0.53546174))
 ```
+
+
+```{r makeupnewdata, echo=FALSE,results='hide'}
+set.seed(1001)
+a <- 0.5259
+h <- 0.0166 * 1.8 # making the handling time 80% greater
+
+initial <- ReedfrogFuncresp$Initial
+
+newdat <- data.frame( Initial=initial,
+											Killed=rbinom(n=16, size=initial, 
+																		prob=holling2(initial, alpha=a, h=h)/initial),
+											Size = rep("Large", 16) 
+										)
+
+rffr <- ReedfrogFuncresp
+rffr$Size <- "Small"
+
+rffr <- rbind(rffr, newdat)
+write.csv(rffr, file="RF_funcresp2.csv", row.names=FALSE)
+```
+
+
+
+Adding a level of complexity 
+----------------------------
+
+So now we have tried fitting three deterministic functions to the same data set. Often, however, we will be more interested in seeing how the _parameters_ of a model change between groups or levels of a treatment. For instance, what if Vonesh and Bolker had repeated their experiment with larger tadpoles? What would you expect would be different? A reasonable hypothesis would be that the attack rate wouldn't change very much, but the handling time might go up considerably since it takes longer to subdue and consume larger tadpoles. In other words, we might expect the kill rate to be a modified Holling type II,
+
+$$
+\begin{aligned}
+attack rate & = \frac{\alpha N_{prey}}{1 + \alpha N_{prey} h_{size}}, 
+\end{aligned}
+$$
+
+where $h$ varies between the two size classes. 
+
+Let us load in the data (found on the wiki as `RF_funcresp2.csv`). 
+```{r load_data_2}
+rffr <- read.csv("RF_funcresp2.csv")
+summary(rffr)
+p2 <- qplot(Initial, Killed, color = Size, data=rffr)
+p2
+```
+
+Does it look like the large tadpoles have a different functional response than the small ones? Is it just a difference in one parameter? 
+
+First, let's construct a modified version of our type II functional response. This function needs to take a new vector of size classes and depending on the size class of each trial, use one or the other value of $h$. We will use the `ifelse()` function to choose which value of $h$ to use. It basically reads, `ifelse( _logical test_, _if true do this_, _if false do this_)`. If you are unsure of what `ifelse()` is doing, try using it outside of the function with some other logical test and other return values.
+
+```{r mod_typeII}
+SS.II.2 <- function(pars, x, y, size){
+	# calculate predictions
+	preds <- holling2(x=x, alpha=pars["alpha"], 
+										h=ifelse(size=="Small", pars["h_small"], pars["h_large"])
+										)
+										
+	SS(obs=y, exp=preds) # get sums of squares from them
+}
+```
+
+We can update our call to `optim()` with few changes, too. We just need to give it the new SS function, two parameters for $h$, and then the data from the new data frame including the vector for size.
+
+```{r optim_2}
+fit <- optim(fn=SS.II.2, par=c(alpha=0.5, h_small=0.025, h_large=0.025), 
+						 x=rffr$Initial, y=rffr$Killed, size=rffr$Size)
+fit
+```
+
+So note that the estimates for `alpha` and `h_small` (which is the same as for `h`, in the previous analyses) have changed a little bit. Make sure you can understand why this is and sort out for yourself whether or not it matters. Also, can we compare the SS we just found with the SS's for the previous models? Why or why not?
+
+But on the bigger question: Is there a big difference in handling time between small and large tadpoles?
+```{r hs}
+fit$par["h_large"]/fit$par["h_small"]
+```
+A quick calculation suggests that the handling time for the larger tadpoles is `r round(fit$par["h_large"]/fit$par["h_small"],1)` times as large as that for small tadpoles, which is pretty substantial. How does this functional response look?
+
+```{r plot2, fig.height=4, fig.width=6}
+p2 + 
+	stat_function(fun=holling2, geom="line", aes(color="Small"), 
+								args=list(alpha=fit$par["alpha"], h=fit$par["h_small"])) + 
+	stat_function(fun=holling2, geom="line", aes(color="Large"), 
+								args=list(alpha=fit$par["alpha"], h=fit$par["h_large"]))
+
+```
+
+So now we have seen how a single parameter of a model can be made to be a function of some predictor variable (here, size of the tadpole). If you are up for it, try making both $\alpha$ and $h$ vary between size classes. Does the SS improve? 
 
 Homework: fitting a function to _your_ data
 -------------------------------------------
