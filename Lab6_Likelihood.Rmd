@@ -1,416 +1,301 @@
-Likelihood (and some of that): EMD chapter 6
-========================================================
+---
+title: 'Fitting models to data part 2: likelihood, by hand and automagically'
+author: "Jesse Brunner"
+date: "February 17, 2015"
+output: html_document
+---
 
-This lab has been adapted from material originally created by Kevin Shoemaker and Jacqui Frair (2009) and modified extensively by Elizabeth Hunter (2011).
+
+This week we will learn to fitting models to data using likelihood as our criterion for fit. Specifically our goals are to:
+
+* calculated the likelihood of a simple data set by hand
+* learn to use R functions to calculate likelihood for you
+* find the parameter values that maximize the likelihood
+* automating the maximizing of likelihood with optim()
 
 
-This week we will learn to fitting models to data using likelihood-based techniques. Specifically our goals are to:
+A simple example, from class
+----------------------------
 
-* estimate the parameters of a model that provide the best fit to the data
-* estimate confidence intervals around those parameters, and 
-* choose among competing models using likelihood-ratio and information criteria
+In class I gave you two problems to work through by hand, with a calculator. Let's revisit these examples using R for the heavy lifting. 
 
-Keep in mind what likelihood is: the probability of getting your particular data given the model (including the parameters of the model).
+The first problem was this: imagine we collected 9 wood frog tadpoles from a pond, brought them back to lab, and found that 4 were infected. What is our best estimate of the probability of infection in the pond, which we will call $\pi$? In likelihood we simply flip this on its head, asking what value of $\pi$ maximizes the probability of seeing our data? The idea is that the parameter value that is most likely to give us our data is the most likeliy, given our data. 
 
-First steps: estimating a parameter from data
----------------------------------------------
+For our data, 4 out of 9 infected (4 successes in 9 Bernouli trials) the likelihood is provided by the binomial: 
 
-We are going to start with the reed frog (_Hyperolius spinigularis_) predation data (Vonesh and Bolker 2005) that you've already seen because it follows a relatively simple form and has a simple likelihood. In fact we will start with a small subset of the data to keep our problem very simple. 
+$$ \mathcal{L}(\pi | 4 \mbox{~of~} 9) = P(4 \mbox{~of~} 9 | \pi) = \binom {9}{4} \pi^4 (1-\pi)^5. $$
 
-First, you need to read in the `ReedfrogPred` data. While normally you will have data in a *.csv file or the equivalent, the data sets Bolker uses can be found in his `emdbook` package. Data from a package are read in with the `data()` function. 
+Notice that $\pi$ is the only parameter in the equation; the data are fixed. So we can choose a value of $\pi$ and then calculate its likelihood, and repeat until we find a value that gives us the maximum $\mathcal{L}$. For example, the likelihood of $\pi = 0.1$ is
 
-```{r rf.loaddata}
-library(emdbook)
-data(ReedfrogPred)
-summary(ReedfrogPred)
+$$ \mathcal{L}(\pi = 0.1 | 4 \mbox{~of~} 9) = P(4 \mbox{~of~} 9 | \pi = 0.1) = \binom {9}{4} 0.1^4 (1-0.1)^5. $$
+
+In R we can calculate this as (remembering that $\binom {9}{4} = \frac{9!}{4!(9-4)!}$)
+```{r likelihood_1}
+factorial(9)/(factorial(4) * factorial(5)) * 0.1^4 * 0.9^5
+# which is the same as
+choose(n=9, k=4) * 0.1^4 * 0.9^5
 ```
 
-Parameter estimation is simplest when the data represent a collection of independent observations that all have the same set of parameters.  Because predation on tadpoles is both size- and density-dependent, we will subset these data to a single size class (“small”) and density (10) for all treatments including a predator.  
-```{r rf.subsetdata}
-rfp <- subset(ReedfrogPred, pred=="pred" & size=="small" & density==10)
-
-rfp
+If you remember back to last week, though, you will recall that R has built-in functions to provide the probability (density or mass), like _dbinom(). (If you don't remember, look back at last week's lab.) Before we had the probability of success fixed and the found the probability of different outcomes. Now we are interested in holding the outcomes (our data!) constant and varying the probability of success. So for this data set, the probability is
+```{r likelihood_2}
+dbinom(x=4, size=9, prob=0.1)
 ```
-Now think about this: whether or not an individual is eaten by a predator is a Bernoulli trial (a coin-flip) with a probability of predation, $p$.  Since we have many, but a known number of tadpoles that each have an independent chance of being eaten, the overall number of tadpoles eaten should be a binomial. Recall from Bolker Ch 4 (pg. 122) that the probability that $k$ out of $N$ individuals were eaten is:
-$$
+This makes it a lot easier to try lots of values as well as plot the likelihood as a function of different values of $\pi$. 
+```{r likelihood_plot, fig.width=5, fig.height=4}
+pis <- 1:99/100
+Ls <- dbinom(x=4, size=9, prob=pis)
+library(ggplot2)
+qplot(pis, Ls) + geom_vline(xintercept=4/9)
+```
+
+A slightly more complicated example, from class
+-----------------------------------------------
+
+**Model 1: A frog's a frog**
+To complicate things a bit, I added a second sample (of green frog tadpoles) in which 2 of 5 were infected. We are assumint that the probability of infection, $\pi$, is the same between species. The likelihood of both samples (the first AND the second) is just the product of the binomial probability of each sample:
+$$ 
   \begin{aligned}
-   \binom{N}{k} p^k(1-p)^{N-k}
+  \mathcal{L} (\pi | 4 \mbox{~of~} 9 \cap 2 \mbox{~of~} 5) 
+  &= P(4 \mbox{~of~} 9 | \pi ) \times P(2 \mbox{~of~} 5 | \pi) 
+  &= \binom {9}{4} \pi^4 (1- \pi)^5 \times \binom {5}{2} \pi^2 (1 - \pi)^3
   \end{aligned}
 $$
 
-If you go back to the definition of a likelihood you will realize that this is the _likelihood_ of your data (here, one trial with $k$ out of $N$ tadpoles eaten) given your model (a fixed probability, $p$, of predation). So for instance, the likelihood of seeing 3 out of 10 tadpoles eaten (the first row of our reduced data set) if the probability of being killed was 0.2 would be:
-```{r L.1}
-dbinom(3, prob = 0.2, size = 10)
-```
-
-
-Since the observations are independent, the joint likelihood of the _whole_ data set is simply the product of the likelihood of each individual observation.  So, if we have $n$ observations, each with the same total number of tadpoles $N$ (note the upper and lowercase), and the number of tadpoles killed in the $i^{th}$ observation is $k_i$, then the likelihood is:
+In general the likelihood of multiple samples, each of size $n_i$ with probability of success, $\pi$, is just the product of the likelihood of each sample: 
 $$
-	\begin{equation}
-	 \mathcal{L} = \prod\limits_{i=1}^n\binom{N}{k_i} p^{k_i}(1-p)^{N-k_i}
-	\end{equation}
+	 \mathcal{L} = \prod\limits_{i=1}^N \binom{n_i}{k_i} \pi^{k_i}(1-p)^{n_i-k_i}.
 $$
 
-For our small data set, the individual likelihoods, given $p=0.2$, are:
-```{r L.2}
-# calculate the number that were _killed_ from the data on the number surviving
-k <- rfp$density - rfp$surv
+So to make sure you can do this, calculate the likelihood of this full data set with the two samples. (Note, the answer should be `r round(dbinom(x=4, size=9, prob=6/14)*dbinom(x=2, size=5, prob=6/14), 4)`. If you are not gettin this, remember that in this simple case, the $\pi_{MLE} = 6/14$.)`
 
-dbinom(k, prob = 0.2, size = 10)
-```
-And the joint likelihood is:
-```{r L.3}
-prod( dbinom(k, prob = 0.2, size = 10) )
-```
-
-The joint likelihood values will always be less than 1, and will get smaller and smaller each time we add more data. Can you see why? (This is one reason why we prefer to work with log-likelihoods; they don't become vanishingly small when we have large data sets. They also have nicer mathematical properties.)
-
-Try some other values of $p$ and see what happens to the likelihood. It is important to keep in mind that your data are fixed and the value of $p$ is what we change. 
-
-We can automate this process and systematically calculate the likelihood over the entire possible parameter space from 0 to 1.  
-```{r L.p.loop}
-# First we make a sequence of 100 probabilities from 0.01 to 1.
-p <- seq(0.01, 1, by=0.01)
-
-# Then we make an empty storage vector for the likelihoods we’ll calculate
-Lik <- numeric(length=100)
-
-# loop through the 100 values of p, each time calculating the likelihood 
-# of the entire data set given that value of p
-for(i in 1:100) {
-	Lik[i] <- prod( dbinom(k, prob = p[i], size = 10) )
-}
-```
-It is worth noting that R is not terribly efficient at loops. In general you will save orders of magnitude in performance (e.g., speed) if you can avoid a loop and instead operate on an entire vector, matrix, or list all at once. We could do this by applying our function for the likelihood to the whole vector of 100 values of $p$ using the `sapply()` function.
-```{r L.p.sapply}
-Lik <- sapply(p, FUN = function(x) prod( dbinom(k, prob = x, size = 10) ) )
-```
-In either case, we get the same results. Let us then plot the likelihood against the various values of $p$.
-```{r L.p.plot, fig.width=5, fig.height=4}
-library(ggplot2)
-qplot(p, Lik, geom = "line", xlab="Predation Probability", ylab="Likelihood")
-```
-You will see that any particular value of $p$ has a really low likelihood associated with it, but some values are much more likely than others. The maximum is at ~0.25. This should not be a surprise seeing as how 10 out of 40 tadpoles in our data set were killed. 
-
-As we noted above, we usually work in terms of the log-likelihood (LL), which is:
+As we observed in class (and you can quickly verify for yourself using R), the likelihood values get smaller as the sample size increases. This causes computational problems when these products of small numbers get closer and closer to zero. So instead we usually work in terms of the log-likelihood (LL), which is:
 $$
-	\begin{equation}
-	 L = \sum\limits_{i=1}^n \left( \log \binom{N}{k_i} +k_i\log p + (N-k_i) \log(1-p) \right)
-	\end{equation}
+	 LL = \sum\limits_{i=1}^N \left( \log  \binom{n_i}{k_i} +k_i\log \pi + (n_i-k_i) \log(1-\pi) \right)
 $$
-Note that instead of having a product of many small numbers, we have their sum. This makes it much easier to calculate LL for larger sample sizes.
+Note that working with the log-likelihood we now work with the sums. This makes it much easier to calculate L for larger sample sizes. In R we can simply calculate the LL by specifying `log=TRUE` in the `dbinom()` (or equivalent) function. 
 
-In R we can simply calculate the LL by specifying `log=TRUE` in the `dbinom()` (or equivalent) function and changing the `prod()` to a `sum()`. Mirroring our example above, the joint _log_-likelihood is:
-```{r LL.1}
-sum( dbinom(k, prob = 0.2, size = 10, log = TRUE) )
+So our log-likelihood for the above example is:
+```{r logLik}
+dbinom(x=4, size=9, prob=6/14, log=TRUE) + dbinom(x=2, size=5, prob=6/14, log=TRUE)
 ``` 
-And the values of the LL for all values of $p$ are calculated (using the `sapply()` version of the code):
-```{r LL.p.sapply, fig.width=5, fig.height=4}
-LL <- sapply(p, FUN = function(x) sum( dbinom(k, prob = x, size = 10, log = TRUE) ) )
-
-qplot(p, LL, geom = "line", xlab="Predation Probability", ylab="Log-Likelihood") +
-	# add a vertical line where the maximum LL is found
-	geom_vline(xintercept = p[which(LL==max(LL))])
+And the plot we created above is 
+```{r loglikelihood_plot, fig.width=5, fig.height=4}
+LLs <- dbinom(x=4, size=9, prob=pis, log=TRUE) + dbinom(x=2, size=5, prob=pis, log=TRUE)
+qplot(pis, LLs) + geom_vline(xintercept=6/14)
 ```
 
-In this simple case we were able to try all possible values of $p$ to see which was best, but in most cases there would be too many options to try (imagine trying all combinations of 100 values of each of 10 parameters... it would take _forever_!). Instead we rely on optimization functions to find the best-fit solution. *NOTE:* most such functions _minimize_ some value (e.g., the sums of squares) so we need to turn our problem into minimizing the _negative_ log likelihood. We first define a function to provide the negative log-likelihood (NLL):
-```{r binomNLL1}
-binomNLL1 <- function(p, k, N) {
-	-sum(dbinom(k, size=N, prob=p, log=TRUE))
+In actual fact, though, we tend to work on the _negative_ log-likelihood (NLL) because minimization problems are a bit easier to code than maximization problems (just like we did with sums-of-squares two weeks ago) and because this quantity is used in metrics of fit like AIC. It is honestly just a matter of putting a minus sign in front of the equation or code.
+
+```{r NLL_plot, fig.width=5, fig.height=4}
+-( dbinom(x=4, size=9, prob=6/14, log=TRUE) + dbinom(x=2, size=5, prob=6/14, log=TRUE) )
+NLLs <- -( dbinom(x=4, size=9, prob=pis, log=TRUE) + dbinom(x=2, size=5, prob=pis, log=TRUE) )
+qplot(pis, NLLs) + geom_vline(xintercept=6/14)
+```
+
+Again, we put a vertical line at $\pi_{MLE}$. It may be difficult for you to see that this is really the minimum (i.e., the MLE), but computurs are pretty good at figuring out these small differences. 
+
+Finding the maximum likelihood with optimization
+-----------------------------------------------
+
+Ideally (and soon, necessarily) we want to automate the way we find MLEs. In outline, it is very similar to what we did with the sums-of-squares before. In fact, we will start with the 'optim()' function like we used two weeks ago before learning a slightly snazzier function. 
+
+First we need a function that takes our data (both $n$ & $k$ for each sample) and our parameter(s), here $\pi$ and then returns the NLL.
+```{r NLL_fxn}
+binom.NLL <- function(n, k, pi){
+	-sum( dbinom(x=k, size=n, prob=pi, log=TRUE) )
 }
 ```
-And then have the `optim()` function find the NLL for our data given this model. We need to give it a starting value (here `p=0.5`), but then it will search from there for a better solution.
-```{r optim1, warning=FALSE}
-opt1 <- optim(fn=binomNLL1, par = c(p=0.5), N = 10, k = k, method = "BFGS") 
-opt1
+(You may be wondering why we're bothering writing our function so it can handle long vectors of numbers, using the `sum()` function and all rather than a simple `+`. We only have two sample, after all! Well, most of the time we will have much larger data sets where keeping track of all of the `+`'s would be difficult, but more importantly we should try to write our functions so that they can handle _any_ dataset that is similar to what we have in hand. This formulation, which works on vectors, can handle vectors of length 2, which we have here, to much longer ones.)
+
+Let's make sure that this works with our data from the example above.
+```{r NLL_fxn_test}
+tested <- c(9,5)
+infected <- c(4,2)
+binom.NLL(n=tested, k=infected, pi=6/14)
 ```
-You may get several warning messages, which is just fine. But do you know why?
-
-In the output of `opt`1` include a `convergence` code: `0` means it converged on a stable solution, `1` means it didn't. `value` is our NLL. See if you can convert that back to a likelihood and see if it fits our previous answer. (Keep in mind that there may be some rounding error.) Lastly, `par` is our parameter, $p$, which is damn close to 0.25. 
-
-Right, so we get the same result using likelihood, log-likelihood, or plain common sense (10 out of 40 died? Wouldn't you guess that the per capita predation rate was close to 1/4??). It is always nice to make sure that we get sensible answers in the simplest cases. Now we can move on to something a bit more complicated.
-
-
-Likelihood when there is a complex, deterministic function
----------------------------------------------
-So we’ve looked at how to obtain the likelihood of getting our data set given a very simple deterministic model (a constant probability of predation) and a distribution of our data given that underlying model (the binomial distribution). Now we want to consider more interesting ecological questions like when the mean or variance of the parameters of the model may vary among groups or depend upon covariates.  Recall that we subset our data above because we expected survival to be (in part) density-dependent. Here we’ll consider how to model the probability of tadpole survival as a function of the initial density of tadpoles in the population.  To do so, we need to incorporate a deterministic function that describes how survival probability varies with density. 
-
-The example we will use is the functional response of predators to the initial density of tadpoles. 
-```{r rffr.init, fig.width=5, fig.height=4}
-data(ReedfrogFuncresp)
-qplot(x = Initial, y = Killed, data = ReedfrogFuncresp)
+OK, the function works. Now we can try to use 'optim()` to automatically find $\pi_{MLE}$, which should be 6/14 = `r 6/14`. 
+```{r NLL_optim}
+optim(fn=binom.NLL, par=c(pi=0.5), n=tested, k=infected, 
+			method="Brent", lower=0.1, upper=1) 
 ```
-What sort of function might describe the number of tadpoles killed as a function of their initial density? It looks like it could be linear, but because we know that this is a predation response, and that predators become handling limited at high prey densities, we might instead expect some sort of saturating function, like a Type II functional response. Generally this is written as:
-$$
-	\begin{equation}
-	 \text{Predation rate} = \frac{aN}{1+ahN}
-	\end{equation}
-$$
-where $a$ is the attack rate and $h$ is the handling time. Let's create the function for the Holling type II functional response and see how it fits the data "by eyeball." It is helpful to remember that $a \approx$ the slope at low densities and that $h \approx$ 1/asymptote. We'll try $a = 10/20$ and $h = 1/50$ for a start.
-```{r fithollingII, fig.width=5, fig.height=4}
-Holl2<-function(x, a, h){
-	(a*x)/(1+(a*h*x))
-}
-
-qplot(x = Initial, y = Killed, data = ReedfrogFuncresp) +
-	stat_function(fun = Holl2, args = list(a = 10/20, h = 1/50))
-```
-That's not a bad guess (and you should try some others) but we would like to _fit_ this model to the data in a more formal way, using likelihood. To do that we need combine our model to a stochastic function that can give us probabilities. That is, we need to determine the distribution of our data, here the proportion of tadpoles killed. 
-```{r rffr.hist, fig.width=5, fig.height=4}
-qplot(Killed/Initial, data = ReedfrogFuncresp)
-```
-Keep in mind, though, that we are not accounting for the _deterministic_ differences in predation rates across density, so we wouldn't expect these data to match any particular stochastic distribution perfectly. So based on this (imperfect) analysis of this distribution of our data and how we would expect predation events to happen (killed or not killed), a binomial distribution would seem to be appropriate. 
-
-Of course the binomial requires the _per capita_ probability of being eaten, not the overall number we'd expect to be eaten, which the Holling type II equation provides. On page 182 Bolker reminds us that if we were to divide both sides by $N$ we get the per capita predation rate:
-$$
-	\begin{equation}
-	 \text{Per capita predation rate} = \frac{a}{1+ahN}
-	\end{equation}
-$$
-Which is essentially a hyperbolic. This means that the per capita predation rate of tadpoles decreases hyperbolically with tadpole density.  This is the deterministic function we’ll use for our analysis. 
-
-So now we have both pieces in place, the deterministic model and the stochastic model. Next we write a negative log likelihood function, as we did before, but this time we’ll incorporate the deterministic model.
-```{r binomNLL2}
-binomNLL2<-function(params, N, k){
-	# unpack the parameters from the params vector
-	a = params[1]
-	h = params[2]
-	# calculate the deterministic expectation
-	predprob = a /(1+a*h*N)	
-	# then calculate the negative log-likelihood of the data given this expectation 
-	-sum(dbinom(k, prob=predprob, size=N, log=TRUE))
-}
-```
-
-This function says that the structure of the data is described by a binomial distribution (either killed or not), and that the probability of predation (the number killed divided by the initial number) is explained by the Holling type II equation (or actually, by the hyperbolic version).  
-
-To find the parameter values that best describe these data we will use optim() and give it the same initial values for a and h that we used to plot the curve.  Again, $N$ is the initial number of tadpoles, and $k$ is the number of tadpoles killed.
-```{r opt2}
-opt2 <- optim(fn=binomNLL2,  par=c(a=1/2,h=(1/50)), N=ReedfrogFuncresp$Initial, k=ReedfrogFuncresp$Killed)
-opt2
-```
-The results are not that different from our starting values, so we made a good guess.  Plot this line onto your data points to see how different the two lines are.
-
-Confidence intervals
---------------------
-Now we’d like to visualize confidence intervals around this line to make a plot like Figure 6.5a in the book.  We could use a loop to do this, but let’s try using vectors as it’s usually faster to do so in R, although not necessarily in this case.
-
-First we’ll need vectors of x and y values precisely along the best fit line.  
-```{r vectors}
-# vector of initial tadpole densities
-xvec<-0:100
-# vector of predicted number of tadpoles eaten
-yvec<-Holl2(xvec, a=opt2$par["a"], h=opt2$par["h"])
-```
-
-Next we’ll use `qbinom()` to estimate the 95% confidence intervals of the binomial distribution.  Use the ratio of the x and y values to get a probability value from 0 to 1 in the `qbinom()` function:  
-```{r vector.ci}
-upper<-qbinom(0.975, prob=yvec/xvec, size=xvec)
-lower<-qbinom(0.025, prob=yvec/xvec, size=xvec)
-```
-To plot our predictions and confidence intervals alongside the data, it will help to make a data frame with `xvec`, `yvec`, `upper`, and `lower`. We will plot in layers, starting with the confidence interval and the predicted values (using `geom_pointrange`), and then the actual data points (`geom_point`) so that the data are behind the confidence intervals.
-```{r plotpedictions, fig.width=5, fig.height=4}
-preds <- data.frame(xvec, yvec, upper, lower)
-
-qplot(xvec, ymin = lower, ymax = upper, y = yvec, geom = "pointrange", color = I("gray"), ylab = "Killed", xlab = "Initial number of tadpoles") + 
-	
-	# Note that we have to specify ymax and ymin in this second data frame, even though geom_point doesn't require those values, ggplot2 looks for them
-	geom_point(data = ReedfrogFuncresp, aes(x = Initial, y = Killed, ymax = Killed, ymin = Killed))
-```
-So it looks like all but one data point fall within the 95% CI of our predictions. Bolker calls these "plug-in"" confidence intervals because they ignore the uncertainty in the $a$ and $h$ parameters and just use the uncertainty in the binomial distribution. More honest confidence intervals would have to include the joint distribution of uncertainty in $a$ and $h$, so called "profile" confidence intervals (see EMD 187-189). We'll return to this in just a moment, but right now we can be pretty happy with our first interesting model fit to data!
-
-Profile confidence intervals
----------------------------
-
-Making plug-in confidence intervals looks nice on the plot, but they assume that we know the parameters $a$ and $h$ of the Holling type II / hyperbolic function perfectly and that all of the uncertainty in our estimates comes from the fact that our data are binomially distributed. In actual fact, we estimated these parameters and our estimates have some uncertainty associated with them. Our goal now is to understand the uncertainty/confidence we have in our estimates. To do so we will calculate so-called "profile" confidence intervals. 
-
-In essence, we will pick values of one parameter (e.g., $a$) and then at each of those fixed parameter values re-optimize the likelihood with the other parameters free (here just $h$). We did something very similar in our first example, only there was only one parameter to worry about. Here we focus on the one parameter and find the MLE of the other(s). 
-
-First, we need to modify our negative log-likelihood function so that $a$ can be fixed at specific values. (To calculate the likelihood profile for $h$, we would do just the opposite.)
-```{r binomNLL2.a}
-binomNLL2.a <- function(params, N, k, a){
-	# unpack the remaining parameters
-	h = params[1]
-	# calculate the deterministic expecation
-	predprob <- a / (1 + a*h*N)
-	# calculate the NLL given this expectation
-	-sum(dbinom(k, prob = predprob, size = N, log = TRUE))
-}
-```
-
-We then want to loop through values of $a$, finding the NLL at each value. (You will get warnings.)
-```{r profile.a, warning=FALSE, fig.width=5, fig.height=4}
-# create a vector of a-values
-as <- seq(0.3, 0.8, length = 100)
-# and then a vector to hold the NLL for each value of a
-as.NLL <- numeric(100)
-
-# loop through values of a, 
-for(i in 1:100){
-	# find & store the maximum NLL at each fixed value of a
-	as.NLL[i] <- optim(fn=binomNLL2.a,  par=c(h=(1/50)),
-										 a = as[i],
-										 N=ReedfrogFuncresp$Initial, k=ReedfrogFuncresp$Killed, 
-										 method = "BFGS")$value
-}
-
-# plot of the NLL against all values of a
-qplot(as, as.NLL, geom = "line")
-		
-```
-So we can see how the NLL increases (gets worse) as we move away from the MLE of $a$ (= `r round(opt2$par["a"], 2)`), but how do we find the cutoff with more precision that just eyeballing it? Well for a cutoff we refer to the 95th quantile of the $\chi^2$ distribution with 1 degree of freedom (see EMD pp 191-193 for the logic), which amounts to adding ~1.92 to the lowest NLL. What values of $a$ are associated with our lowest NLL + 1.92?
-```{r cutoff.a}
-# find the cutoff NLL value
-(cutoff <- opt2$value + qchisq(0.95,1)/2)
-# find values within +/- 0.1 of the cutoff
-as.NLL[ as.NLL < cutoff + 0.2 & as.NLL > cutoff - 0.2 ]
-# find the values of a associated with these NLLs close to the cutoff
-as[ as.NLL < cutoff + 0.2 & as.NLL > cutoff - 0.2 ]
-```
-So it looks like our 95% confidence interval goes from about 0.401 or 0.406 to 0.679 or 0.684. If you are fine with this level of precision (the cutoff comes from an approximation that only holds when n is very large after all) then you've found your answer. If you want more precision, we will need to interpolate using the `approx()` function.
-```{r profileCI.a}
-# extract the NLLs on the left (lower) side of the curve, up to the minimum NLL
-as.NLL.lower <- as.NLL[1:which.min(as.NLL)]
-# and the values of "a"" associated with them
-as.lower <- as[1:which.min(as.NLL)]
-# feed them into the approx function
-approx(as.NLL.lower, as.lower, xout = cutoff)
-# and repeat for the right (upper) side of the curve
-as.NLL.upper <- as.NLL[which.min(as.NLL):length(as.NLL)]
-as.upper <- as[which.min(as.NLL):length(as.NLL)]
-approx(as.NLL.upper, as.upper, xout = cutoff)
-```
-So, more precisely, our 95% CI on $a$ is 0.4025 -- 0.6825! Can you repeat this for the other parameter, $h$? It would be a good exercise for you to give it a try, you could even write your own function to do the tedious bits, but if you a) already get it or b) feel like your sinking and just want to see how you might do this in "real life", see how to do all of this using the `bbmle` package, which I explain at the bottom of the end of this document.
-
-
-2D Likelihood surfaces for two parameters at a time
-------------------------------------------------
-
-You probably would not be surprised to learn that the two parameters of our mode, $a$ and $h$, are not independent, but rather covary. With a little thought we might expect that if the attack rate is low, then the handling time would have to be low as well to fit the data. (Not sure you see that? Go back and try different combinations of parameters to see which types of combinations provide reasonable fit to the data.) In order to visual (and thus better understand) the covariance of our parameters and to find the bivariate confidence limits, we need to plot a 2-dimensional likelihood surface.  
-
-Basically, we want to see how the likelihood changes as we change $a$ and $h$ simultaneously. In the last lab, we made plots that had power being affected by two factors, now we’ll make plots that have likelihood being affected by two parameters.  What we’ll end up with will look something like Figure 6.7. Also, since our model only has two parameters, we no longer need to use `optim()`...there is nothing to optimize! We need only get the NLL for each combination of $a$ and $h$. If you were going to do this with a model that had other parameters, you would need to optimize the other free parameters.
-
-
-```{r bivariate}
-# create our vectors of "a" and "h" values
-as <- seq(0.3, 0.75, length = 50)
-hs <- seq(0.0025, 0.030, length = 50)
-# and a matrix to hold the NLL values
-NLL <- matrix(,nrow = 50, ncol = 50)
-rownames(NLL) <- as
-colnames(NLL) <- hs
-
-# the cycle through the values of "a" (rows in NLL matrix)
-for(i in 1:50){
-	# and cycle through the values of "h" (columns in NLL matrix)
-	for(j in 1:50){
-		# set the right params
-		params <- c(a = as[i], h = hs[j])
-		# calculate the NLL given these params
-		NLL[i,j] <- binomNLL2(params, 
-													N = ReedfrogFuncresp$Initial, k = ReedfrogFuncresp$Killed)
-	}
-}
-```
-This produces a matrix of NLL values, but for plotting we need a "long" data set with one combination of $a$, $h$, and NLL per row. So we convert it, and then label the column names.
-```{r reshape}
-library(reshape)
-NLL.m <- melt(NLL)
-head(NLL.m)
-colnames(NLL.m) <- c("a", "h", "NLL")
-```
-Plot the 2D map using `geom_tile()`. We then use `scale_fill_gradient2()` to specify colors according to values of NLL. We use the limits to focus on values relatively close to the minimum NLL...if we don't the scale gets washed out since NLL values go well above 150. We then add a contour line at the cutoff value for the _bivariate_ confidence interval. Notice that we changed the degrees of freedom for the $\chi^2$ distribution. Lastly we add a point for the MLE of $a$ and $h$.
-```{r 2D, warning=FALSE}
-cutoff <- opt2$value + qchisq(0.95,2)/2
-
-ggplot(NLL.m, aes(x = a, y = h, fill = NLL)) +   
-	geom_tile(aes(fill = NLL), colour = "white") +   
-	scale_fill_gradient2(low = "red", mid = "white", high = "blue", 
-											 midpoint = cutoff, 
-											 limits = c(opt2$value, opt2$value+6) ) +
-	stat_contour(aes(z = NLL), breaks = cutoff) +
-	geom_point(aes(x = opt2$par["a"], y = opt2$par["h"]))
-```
-
-
-Overview
---------
-Let’s review the steps of what we just did:
-
-**Step 1.  Identify the response and explanatory variables**: Predation probability and Initial Population Size.  Just stating what the response and explanatory variables are will help you start modeling. Drawing the relationship  between them is even better
-
-**Step 2.  Specify the deterministic function**: Here it was the Holling type II.  We chose this function mechanistically, but we could have chosen different functions just by looking at the plot of the points.
-
-**Step 3.  Determine the stochastic distribution:** Here it was the binomial.  In this case, the stochastic distribution was easy to identify because we chose it mechanistically.  Other times it may not be so clear what the best distribution is, and looking at the histogram and plotting different distributions over the top will be helpful.
-
-**Step 4.  Specify the likelihood of the data given our deterministic expectations and the stochastic distribution**: We wrote this into our `binomNLL2()` function.  Our negative likelihood function combined the stochastic and deterministic elements together by having the stochastic parameter (in this case the binomial probability, $p$) be dependent upon the deterministic parameters of the Holling type II we modified to produce a per capita probability (a hyperbolic function).
-
-**Step 5.  Make a guess for the initial parameters**: $a$=0.5, $h$=1/50.  You need to have an initial guess at the parameters to make `optim()` work, and we plotted the Holling curve to make our guess.  Sometimes you will also need to make a guess at the parameters for the stochastic distribution.  In these cases, the method of moments is the best option.
-
-**Step 6.  Estimate the best fit parameters using maximum likelihood**: We used `optim()` to search through combinations of parameters $a$ and $h$ to find the maximum likelihood estimates (MLEs) for those parameters that correspond to the minimized negative log-likelihood (NLL). The results were saved at `opt2`.
-
-**Step 7.  Add confidence intervals around your estimates**  We calculated some plug-in estimates to put confidence regions around your estimates based on the stochastic function.  We then calculated 1-dimensional profile confidence intervals and then a 2-dimensional likelihood surface. 
-
-Homework: Fit a Ricker model to the myxomatosis data
-----------------------------------------------------
-
-We went through, start to finish, one analysis of predation rates of tadpoles. The best way to make this stick is to do it again on your own, with a new data set. Your assignment is to analyze the myxomatosis data set in the `emdbook` package by trying to fit a Ricker model to these data. We will restrict our analyses just to Grade I (the most virulent) myxomatosis.
-```{r myxo, eval=FALSE}
-library(emdbook)
-data(MyxoTiter_sum)
-myxo <- subset(MyxoTiter_sum, grade == 1)
-```
-The analyses are analogous to what we just did, so just adapt what we did (making sure  you understand it) and don't re-invent the wheel (unless you like that sort of thing). If you get stuck, you can refer to the book, work with you fellow students, and even ask me questions. 
-
-I would like you to send me a figure of your best-fit line to the myxomatosis data as well as your MLEs and profile confidence intervals. 
-
-
-
-
-### Footnote: using the `bbmle` package.
-
-Bolker has written a packaged called `bbmle` that has functions that can fit likelihood models for us (it calls `optim()` for us and takes care of a lot of niggly bits) and calculate profile likelihood confidence intervals. Most of the time his functions work well, but it is important to know more or less what they are doing so you can trouble shoot or, if you can't get his to work, to make your own.
-
-First we need to rewrite the `binomNLL2()` function so that it takes separate parameters rather than a vector of parameters (`params`) that `optim()` required.  Otherwise our function is unchanged.
-```{r binomNLL2.mle2}
-binomNLL2.mle2<-function(a, h, N, k){
-	# calculate the deterministic expectation
-	predprob = a /(1+a*h*N)	
-	# then calculate the negative log-likelihood of the data given this expectation 
-	-sum(dbinom(k, prob=predprob, size=N, log=TRUE))
-}
-```
-
-We can then use the `mle2()` function to do the optimization for us. Note that we need to provide both a list (rather than a vector) of initial starting values and a list of our data. The function is clever enough, though, that had we used the names of the columns in the data frame in our function we would only need to provide the name of the data frame.
-```{r bbmle1, warning=FALSE}
+Success! So we can automagically find the MLE for our simple model and, just like before, with models that have multiple parameters. In the longer run, `optim()` has some rough edges and makes a few things we'd like to do a bit difficult. Thankfully, Bolker has written a package called `bbmle` that has function, `mle2()`, that can fit likelihood models for us (it calls `optim()` for us and takes care of a lot of niggly bits). In outline it works the same, but it prefers both a list (rather than a vector) of initial starting values and a list of our data. 
+```{r NLL_mle2}
 library(bbmle)
-m1 <- mle2( binomNLL2.mle2, 
-						start=list(a = 1/2, h = (1/50)),
-						data = list(N = ReedfrogFuncresp$Initial, k = ReedfrogFuncresp$Killed)
-						)
-m1
-summary(m1)
-# there are several functions that can extract useful parts of our fit model, such as the coefficients:
-coef(m1)
-# the log-likelihood
-logLik(m1)
-# and the variance-covariance matrix
-vcov(m1)
-# To calculate the profile likelihood, we simply say:
-p1 <- profile(m1)
-# which we can plot
-plot(p1)
-# or use to calculate the confidence intervals on the parameters
-confint(p1)
+mle2(binom.NLL, start=list(pi=0.5), data=list(n=tested, k=infected))
 ```
-Pretty sweet, huh? There is even a `predict()` function that returns predicted values, based on your fitted model, for new data. I'll set you look into it.
+Why do we get slightly different values with `mle2()` than from `optim()`? It comes down to different default optimization algorithms. We could, however, get the same exact answer if we said `method="Brent, lower=0.1, upper=1` in the call to `mle2()`. It is, afterall, just a nice wrapper around the call to `optim()`. So they may seem very similar, but in the longer run `mle2()` has some very nice bells and whistles, so we will stick with it.
 
-One last item to note: the `mle2()` function can also take our model using the formula notation, in which case we do not need to write a separate function to calculate the NLL. Here the variable names _do_ need to match the names of the columns in our data frame. Here we are saying that the number killed is binomially distributed with a probability that is a hyperbolic function of the initial number of tadpoles in the tank. It's simply a more compact version of what we wrote in our `binomNLL2()` function. 
-```{r bbmle2, warning=FALSE}
-m2 <- mle2( Killed ~ dbinom(prob = a/(1 + a*h*Initial), size = Initial), 
-						start=list(a = 1/2, h = (1/50)),
-						data = ReedfrogFuncresp
-						)
-summary(m2)
+**Model 2: A wood frog is not a green frog**
+So the alternative model is that the probability of infection is different for each species, that is $\pi_{wf} \neq \pi_{gf}$. Overall, our likelihood looks like it did above, only with two different $\pi$s.
+$$ 
+  \begin{aligned}
+  \mathcal{L} (\pi_{wf}, \pi_{gf} | 4 \mbox{~of~} 9 \cap 2 \mbox{~of~} 5) 
+  &= P(4 \mbox{~of~} 9 | \pi_{wf} ) \times P(2 \mbox{~of~} 5 | \pi_{gf}) 
+  &= \binom {9}{4} \pi_{wf}^4 (1- \pi_{wf})^5 \times \binom {5}{2} \pi_{gf}^2 (1 - \pi_{gf})^3
+  \end{aligned}
+$$
 
+How do we code this in R? Well, we just need to change our `binom.NLL()` function to accomodate the two sets of data with different parameters. We need it to take as an argument a vector telling it which group is which (here, `spp`) and then also the two parameters. Within the function, then, it just needs to use the right parameter for each species/group. 
+
+```{r NLL_fxn2}
+binom.NLL2 <- function(n, k, spp, piWF, piGF){
+	-sum( dbinom(x=k, size=n, 
+				prob= ifelse(spp == "WF", piWF, piGF), 
+				log=TRUE) )
+}
 ```
+Notice that now prob is either `piWF` (when `spp == "WF"` is `TRUE`) or `piGF` (when `spp == "WF"` is `FALSE`). Let's see what we get.
+
+```{r NLL_fxn2_mle2}
+# create a vector species
+spp <- c("WF", "GF")
+# use mle2 to fit the model with _two_ parameters to the data
+mle2(binom.NLL2, start=list(piWF=0.5, piGF=0.5), data=list(n=tested, k=infected, spp=spp))
+```
+We should see that the estimate of $\pi_{wf}$ is the same as the MLE for $\pi$ in the first dataset with only wood frogs. The estimate for $\pi_{gf}$ should confirm your intuition, too.
+
+--------------------
+
+_Optional!_
+This first way to do things is robust and will always work. If your head is swimming, then maybe skip to the next section. You don't need the second way of doing things, but it can be nice. If you're still holding on, let's see the second way to fit a model with different parameters for each species. It depends on the internal magic of the `mle2()` function and will thus take a bit of explanation. 
+
+In the `mle2()` function we can specify our likelihood as a _formula_ rather than as a separate function. Let's see the example for model 1, with a single common value of $\pi$. 
+```{r mle2_wizardry_1}
+mle2(infected ~ dbinom(size=tested, prob=pi),
+		 start=list(pi=0.5), 
+		 data=list(tested, infected)
+		 )
+```
+The formula is `infected ~ dbinom(size=tested, prob=pi)`, which reads, "the number infected is binomially distributed with the `size` of each trial equal to the number tested and a probability (`prob`) of "success" that is a constant called `pi`." (If you look at the help file for `dbinom()` you will see that the first argument it takes is `x`, the number of "successes". The `mle2()` function knows that whatever is on the left side of the equation (left of the tilde) is this `x`. Everything else needs to be inside `dbinom()` part of the equation. Also note that `mle2()` knows to set `log=TRUE` when it calls `dbinom()`. ) So this formula notation simplifies things a bit and, provided you are careful, can make your code a lot cleaner. It won't work in every case, but it is a good bit more flexible than I've shown (and as we'll see next week). 
+
+Now on to how to have different parameters for each group. _If_ we use the formula notation, it becomes fairly simple. We can make the parameter `pi` a linear function of some other variable, like `spp`. 
+```{r mle2_wizardry_2, eval=FALSE}
+mle2(infected ~ dbinom(size=tested, prob=pi),
+		 start=list(pi=0.5), 
+		 data=list(tested, infected, spp), #add "spp" to the data
+		 parameters=list(pi ~ spp) # add a "parameters" option saying that "pi" is a function of "spp"
+		 )
+```
+Note the two things I've added. The most important part is is the `parameters` option. This uses the same formula notation as linear regressions, etc. We could, for instance, say `parameters=list(pi ~ spp + age + pond)` if we provided data on the age of the individual and the pond, etc. 
+
+The results of this call look like this:
+```{r hidden, echo=FALSE, warning=FALSE}
+a <- mle2(infected ~ dbinom(size=tested, prob=pi),
+		 start=list(pi=0.5), 
+		 data=list(tested, infected, spp), #add "spp" to the data
+		 parameters=list(pi ~ spp) # add a "parameters" option saying that "pi" is a function of "spp"
+		 )
+a
+```
+
+You may be a bit confused by the output. You get a `pi.(Intercept)` and a parameter called `pi.sppWF`. This follows the linear regression notation where there is an intercept for the "base" group (here, the first level of `spp`, which is defined, by default alphabetically, as `GF`) and then an added effect of being in the other group (`spp` = `WF`). You can certainly recover the same values we observed before (with a bit of rounding error). $\pi_{gf}$ = `pi.(Intercept)` = `r coef(a)[1]` and $\pi_{wf}$ = `pi.(Intercept)` + `pi.sppWF` = `r coef(a)[1]` + `r coef(a)[2]`= `r sum(coef(a))`. However, if we wanted we could instead fit this model without an intercept, which would yeild estimates of $\pi$ for each species separately. To do so we use the `-1` to say "no intercept".
+```{r mle2_wizardry_3, warning=FALSE}
+mle2(infected ~ dbinom(size=tested, prob=pi),
+		 start=list(pi=0.5), 
+		 data=list(tested, infected, spp), 
+		 parameters=list(pi ~ -1 + spp) 
+		 )
+```
+
+--------------------
+
+An example with two parts to the likelihood!
+-------------------------------------
+
+Let us look at another example that illustrates the flexibility of this approach. Imagine that you were interested in pollination of a certain rare flower. Specifically you wanted to estimate pollinator visitation rates ($\lambda$) as well as the probability that a flower is fertilized given a visit ($\phi$) so that you can get a sense of whether these flowers are pollinator-limited. Estimating pollinator visitation rates is straightforward, if not easy. Just sit in a lawn chair with a beer in hand recording how many visits each of several focal flowers get per day (or hour or whatever). Take a guess: how would these visitation data be distributed? 
+
+The second part, though, is a bit tougher in nature (although I'm sure you could imagine running around with a Q-tip and pollen in the lab or other similar experiments). Generally what you could do is measure the number or fraction of lowers that produced seeds. How do you think these data would be distributed? 
+
+The key to the problem is to realize that the probability of being fertilized (and thus having a seed, ignoring the possible events after fertilization) is a function of both the total number of visits to a flower (which is a function of visitation rate times the time, $t$, the flower is open) and the probability of being pollinated given a visit. We might start by writing down:
+
+$$
+	P(pollinated) = \lambda \times t \times \phi,
+$$
+
+but in fact this would not quite be right. Once a flower is pollinated, it can't be pollinated again, so none of the extra visits that might have been successful count. So instead what we want to do is calculate the probability that a flower is _not_ pollinated and subtract that from one, which is
+
+$$
+	P(pollinated) = 1-(1-\phi)^{\lambda \times t}.
+$$
+
+Make sure you follow the logic before we move on.
+
+Right, so back to our data. We have 10 observations of visitation rates (numbers of visits to a flower per day):
+```{r data1}
+visits <- c(4, 3, 1, 1, 4, 3, 0, 1, 0, 2)
+```
+and we also came back and collected 15 samples of 20 flowers each to measure the proportion that were fertilized:
+```{r data2}
+fert <- c(16, 13, 15, 15, 11, 13, 13, 17, 17, 19, 10, 13, 15, 12, 14)
+```
+
+So let's be clear about the likelihood of each part. Assuming that flowers are visited randomly by pollinators, we would expect our data to be Poisson distributed with a rate paramter $\lambda$ (I sort of telegraphed that, didn't I?) and the fertilization data would be binomially distributed with a probability of success = $P(pollinated)= 1-(1-\phi)^{\lambda \times t}$. For simplicity let's assume that all flowers are open for exactly 5 days. 
+
+Let's build up our likelihood analysis in a few steps, starting with the visitation data. We need a function that gives us the NLL of our data (`visits`) given a value of $\lambda$. 
+```{r pollination_visits_NLL}
+visits.NLL <- function(visits, lambda){
+	-sum( dpois(x=visits, lambda=lambda, log=TRUE) )
+}
+```
+This should look fairly similar to what we did in the previous examples. If you are getting lost, compare this to `binom.NLL()` above. 
+
+So let's find the $\lambda_{MLE}$.
+```{r pollination_visits_MLE}
+mle2(visits.NLL, start=list(lambda=1), data=list(visits=visits))
+```
+```{r echo=FALSE,warning=FALSE}
+lam <- mle2(visits.NLL, start=list(lambda=1), data=list(visits=visits))
+```
+
+We can use the same approach to estimate the probability a flower is pollinated from the `fert` data.
+```{r pollination_fert_NLL, warning=FALSE}
+# our NLL function assuming binomially distributed data
+fert.NLL <- function(fert, size, probFert){
+	-sum( dbinom(x=fert, size=size, prob=probFert, log=TRUE) )
+}
+# find the MLE of probFert
+mle2(fert.NLL, start=list(probFert=0.5), data=list(fert=fert, size=20))
+```
+```{r echo=FALSE,warning=FALSE}
+p <- mle2(fert.NLL, start=list(probFert=0.5), data=list(fert=fert, size=20))
+```
+
+
+So our best estimate of the visitation rate is `r round(coef(lam),4)` per day and our best estimate of the probability of fertilization over the 5d window is `r round(coef(p),4)`. Now how do we use these estimates to figure out the pollination probability, $\phi$? Well the naive approach, which is commonly used and reasonably acceptable, would be to plug these numbers into the equation for the probability of fertilization, which we set out above, and solve for $phi$:
+$$
+P(pollinated) = 1-(1-\phi)^{\lambda \times t} = 
+`r round(coef(p),4)` = 1-(1-\phi)^{`r round(coef(lam),4)` \times 5}.
+$$
+By this method, $\phi =$ `r round( 1-(1-coef(p))^(1/(coef(lam)*5)), 4)`, which isn't a bad guess. It ignores the fact, though, that there is information on $\lambda$ in the `fert` data. That is, the `fert` data can, and should, be used to constrain our best guess at what $\lambda$ should be and thus what $\phi$ is. So how do we combined these data sets to estimate both parameters simultaneously? It is actually not too difficult. We just need to calculate the NLL for each part and then add them together. (Remember, we are interested in the probability of seeing the `visits` data AND the `fert` data, so we need to multiply their likelihoods, but because we are working on the _log_-likelihood scale, we just add them.)
+```{r pollination_combined_NLL}
+poll.NLL <- function(visits, lambda, fert, size, phi){
+	# neg log-likelihood of Poisson-distributed visits
+	NLL.visits <- -sum( dpois(x=visits, lambda=lambda, log=TRUE) )
+	
+	# calculate probFert
+	probFert <- 1-(1-phi)^(lambda*5)
+	# neg log-likelihood of binomially-distributed fertalization data
+	# given a probability of fertilization as calculated
+	NLL.fert <- -sum( dbinom(x=fert, size=size, prob=probFert, log=TRUE) )
+	
+	return(NLL.visits + NLL.fert)
+}
+```
+(Notice that we calculate the `probFert` value using both `phi` and `lambda`, but those values are whatever is given to the function by `mle2()`, they do not change. We are _not_ first finding the MLE of `lambda` and then using that to calculate `probFert`; we could calculate `probFert` right at the start and it would work the same.)
+
+We'll get some errors because the optimization routine is going below 0, etc., but the output look like this: 
+```{r pollination_combined_mle, warning=FALSE}
+mle2(poll.NLL, start=list(lambda=1, phi=0.5), data=list(visits=visits, fert=fert, size=20) )
+```
+
+We have just used the two distinct datasets to estimate these two parameters! Very cool! (The actual values are nearly same as what we got using the naive, two-step approach above, but that will depend a lot on on both the data and the model formulation. In the long run, this approach will get you to the right answer a lot more reliably. It also gets you a likelihood and the ability to calculate confidence intervals, but that is next week!)
+
+
+Homework
+--------
+
+*  Catch up on things
+*  Relax
+*  Think
+*  Think some more
+

@@ -140,7 +140,7 @@ So it looks like we get a minimum value of SS when alpha is a bit above 0.3. Of 
 Optimizing fit with optim()
 ---------------------------
 
-Our goal, of course, is to find an automated way to find the paramter values (here, alpha) that minimizes the sums of squares and is thus the best fit. There are actually several optimization (or minimization) functions, but one of the handiest is `optim()`. It requires a function that returns some value to be minimized (here, the sums of squares) and a vector of initial values of parameters to be optimized over (here, just alpha). It can also take other arguments to be passed to the function (here, x and y). 
+Our goal, of course, is to find an automated way to find the parameter values (here, alpha) that minimizes the sums of squares and is thus the best fit. There are actually several optimization (or minimization) functions, but one of the handiest is `optim()`. It requires a function that returns some value to be minimized (here, the sums of squares) and a vector of initial values of parameters to be optimized over (here, just alpha). It can also take other arguments to be passed to the function (here, x and y). 
 ```{r SS_I_optim}
 optim(fn=SS.I, par=c(alpha=0.5), x=ReedfrogFuncresp$Initial, y=ReedfrogFuncresp$Killed) 
 ```

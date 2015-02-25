@@ -1,0 +1,293 @@
+---
+title: 'Fitting models to data part 3: more complex models and confidence intervals'
+author: 'Jesse Brunner (with material and modifications by Kevin Shoemaker, Elizabeth
+  Hunter, and Jacquie Frair) '
+date: "February 17, 2015"
+output: html_document
+---
+
+
+This week we will learn to fit more complex models to data using likelihood. Specifically our goals are to:
+
+* use mle2() to fit models to the data
+* estimate confidence intervals around those parameters, and 
+* understand "trade-offs" between parameters
+
+Keep in mind what likelihood is: the probability of getting your particular data given the model (including the parameters of the model).
+
+
+Likelihood when there is a complex, deterministic function
+---------------------------------------------
+Last week we looked at how to obtain the likelihood of getting our data set given a very simple deterministic model (a constant probability of infection) and a distribution of our data given that underlying model (the binomial distribution). Now we want to consider more interesting deterministic models. Here we’ll consider how to model the probability of tadpole survival as a function of the initial density of tadpoles in the population.  To do so, we need to incorporate a deterministic function that describes how survival probability varies with density. (Remeber that a few weeks ago we tried to fit various versions of the Holling functional responses to these data by eye and then using sums of squares? Now we just want to do the same thing, only using likelihood as our metric.) 
+
+As a refresher, the Type II functional response is generally written as:
+$$
+	 \text{Predation rate} = \frac{aN}{1+ahN}
+$$
+where $a$ is the attack rate and $h$ is the handling time.
+
+We are going to use the reed frog (_Hyperolius spinigularis_) predation data (Vonesh and Bolker 2005) that you've already seen because it follows a relatively simple form and has a simple likelihood. First, you need to read in the `ReedfrogFuncresp` data. While normally you will have data in a *.csv file or the equivalent, the data sets Bolker uses can be found in his `emdbook` package. Data from a package are read in with the `data()` function. 
+
+```{r rffr_init, fig.width=5, fig.height=4}
+library(emdbook)
+library(ggplot2)
+data(ReedfrogFuncresp)
+summary(ReedfrogFuncresp)
+qplot(x = Initial, y = Killed, data = ReedfrogFuncresp)
+```
+
+Let's (re)create the function for the Holling type II functional response and see how it fits the data "by eyeball." It is helpful to remember that $a \approx$ the slope at low densities and that $h \approx$ 1/asymptote. We'll try $a = 10/20$ and $h = 1/50$ for a start.
+```{r fithollingII, fig.width=5, fig.height=4}
+Holl2<-function(x, a, h){
+	(a*x)/(1+(a*h*x))
+}
+
+qplot(x = Initial, y = Killed, data = ReedfrogFuncresp) +
+	stat_function(fun = Holl2, args = list(a = 10/20, h = 1/50))
+```
+That's not a bad guess (and you should try some others) but we would like to _fit_ this model to the data in a more formal way, using likelihood. Again (like last week) we need find a stochastic distribution with which we can connect our deterministic expectation to our actual data. Since our data are counts of how many tadpoles were killed (`Killed`) out of how many there were initially (`Initial`) a binomial distribution would seem to be appropriate. (Note: before when we used sums of squares we were implicitly assuming that our data were normally distributed. This, of course, is not a terribly good assumption for this type of data.)
+
+Of course the binomial requires a probability (`dbinom(..., prob = XXX)`), the _per capita_ probability of being eaten, not the overall number we'd expect to be eaten, which the Holling type II equation provides. On page 182 Bolker reminds us that if we were to divide both sides by $N$ we get the per capita predation rate:
+$$
+	 \text{Per capita predation rate} = \frac{a}{1+ahN}.
+$$
+This is essentially a hyperbolic. This means that the per capita predation rate of tadpoles decreases hyperbolically with tadpole density. See how a little bit of algebra can be so useful? Anyway, this is the deterministic function we’ll use for our analysis. 
+
+So now we have both pieces in place, the deterministic model and the stochastic model. Next we write a negative log likelihood function, as we did before, but this time we’ll incorporate the deterministic model.
+```{r hollingNLL}
+hollingNLL<-function(N, k, a, h){
+	# calculate the deterministic expectation
+	predprob = a /(1+a*h*N)	
+	# then calculate the negative log-likelihood of the data given this expectation 
+	-sum(dbinom(k, prob=predprob, size=N, log=TRUE))
+}
+```
+
+This function says that the structure of the data is described by a binomial distribution (either killed or not), and that the probability of predation (the number killed divided by the initial number) is explained by the Holling type II equation (or actually, by the hyperbolic version).  
+
+To find the parameter values that best describe these data we will use `mle2()` and give it the same initial values for $a$ and $h$ that we used to plot the curve.  Again, $N$ is the initial number of tadpoles, and $k$ is the number of tadpoles killed. This works just the same way it did last week!
+```{r, warning=FALSE}
+# load the package
+library(bbmle)
+# fit the model to the data 
+holling2.fit <- mle2(hollingNLL, start=list(a = 10/20, h = 1/50), 
+								data=list(N=ReedfrogFuncresp$Initial, k=ReedfrogFuncresp$Killed)
+								)
+holling2.fit
+```
+Not too hard, right? The results are not that different from our starting values, so we made a good guess.  Plot this line onto your data points to see how different the two lines are. 
+
+Plug-in Confidence intervals
+--------------------
+
+We now have the means to find the MLE of the parameters of our models. That is really great, but it's not the whole story. How good a fit is it? Are the estimates precise or would a whole range of values give more or less the same degree fit? One very useful approach to this question is to construct (and plot) confidence intervals. 
+
+First, let us use so-called "plug-in" confidence intervals around our best-fit line to make a plot like Figure 6.5a in the book.  In essence at each x-value we want a lower and upper CI around the predicted point. We could use a loop to do this, but let’s try using vectors as it’s usually faster to do so in R, although not necessarily in this case.
+
+First we’ll need vectors of x and y values precisely along the best fit line.  
+```{r vectors}
+# vector of initial tadpole densities
+xvec<-0:100
+# vector of predicted number of tadpoles eaten
+yvec<-Holl2(xvec, a=coef(holling2.fit)["a"], h=coef(holling2.fit)["h"])
+```
+
+Next we’ll use `qbinom()` to estimate the 95% confidence intervals of the binomial distribution.  Use the ratio of the `yvec` (killed) over `xvec` (initial density) to get the predicted proportion or probability of being eaten, and feed it into `qbinom()` function to get the 97.5% and 2.5% probabilies given those predictions:  
+```{r vector_ci}
+upper<-qbinom(0.975, prob=yvec/xvec, size=xvec)
+lower<-qbinom(0.025, prob=yvec/xvec, size=xvec)
+```
+To plot our predictions and confidence intervals alongside the data, it will help to make a data frame with `xvec`, `yvec`, `upper`, and `lower`. We will plot in layers, starting with the confidence interval and the predicted values (using `geom_pointrange`), and then the actual data points (`geom_point`) so that the data are behind the confidence intervals.
+```{r plotpedictions, fig.width=5, fig.height=4}
+preds <- data.frame(xvec, yvec, upper, lower)
+
+qplot(xvec, ymin = lower, ymax = upper, y = yvec, 
+			geom = "pointrange", color = I("gray"), 
+			ylab = "Killed", xlab = "Initial number of tadpoles") + 	
+# Note that we have to specify ymax and ymin in this second data frame, even though geom_point doesn't require those values, ggplot2 looks for them
+	geom_point(data = ReedfrogFuncresp, 
+						 aes(x = Initial, y = Killed, ymax = Killed, ymin = Killed))
+```
+
+Alternatively if you prefer a "ribbon" for your confidence interval, you could use this:
+```{r, fig.width=5, fig.height=4}
+qplot(xvec, ymin = lower, ymax = upper, y = yvec, 
+			geom = c("ribbon", "line"), fill = I("gray"), 
+			ylab = "Killed", xlab = "Initial number of tadpoles") + 
+	geom_point(data = ReedfrogFuncresp, 
+						 aes(x = Initial, y = Killed, ymax = Killed, ymin = Killed))
+```
+
+So it looks like all but one data point fall within the 95% CI of our predictions. Bolker calls these "plug-in"" confidence intervals because they ignore the uncertainty in the $a$ and $h$ parameters and just use the uncertainty in the binomial distribution. More honest confidence intervals would have to include the joint distribution of uncertainty in $a$ and $h$, so called "profile" confidence intervals (see EMD 187-189). We'll get to this in the next section, but right now we can be pretty happy with our first interesting model fit to data!
+
+Profile confidence intervals
+---------------------------
+
+Making plug-in confidence intervals looks nice on the plot, but they assume that we know the parameters $a$ and $h$ of the Holling type II / hyperbolic function perfectly and that all of the uncertainty in our estimates comes from the fact that our data are binomially distributed. In actual fact, we estimated these parameters and our estimates have some uncertainty associated with them. Our goal now is to understand the uncertainty/confidence we have in our estimates. To do so we will calculate so-called "profile" confidence intervals. 
+
+In essence, we will pick values of one parameter (e.g., $a$ is "fixed" at 0.1, 0.2, 0.3, ... or whatever values we choose) and then at each of those fixed parameter values re-optimize the fit with the other parameters free (here just $h$). Each time we do this we get the negative log-likelihood so that we can see how the NLL changes as we vary our fixed parameter (here $a$).  (To calculate the likelihood profile for $h$, we would do just the opposite.)
+
+First, it will help to note that we can fix parameter values pretty easily with the `mle2()` function.
+```{r holling_a, warning=FALSE}
+mle2(hollingNLL, start=list(h = 1/50), 
+		 fixed=list(a=0.2), # fix a at 0.2 and let h change to maximize the likelihood
+     data=list(N=ReedfrogFuncresp$Initial, k=ReedfrogFuncresp$Killed)
+)
+mle2(hollingNLL, start=list(h = 1/50), 
+		 fixed=list(a=0.3), # fix a at 0.3 and do the same
+     data=list(N=ReedfrogFuncresp$Initial, k=ReedfrogFuncresp$Killed)
+)
+```
+
+We just want to loop through values of $a$, finding the NLL at each value. 
+```{r profile_a, warning=FALSE, fig.width=5, fig.height=4}
+# create a vector of a-values
+as <- seq(0.3, 0.8, length = 100)
+# and then a vector to hold the NLL for each value of a
+as.NLL <- numeric(100)
+
+# loop through values of a, 
+for(i in 1:100){
+	# find & store the maximum NLL at each fixed value of a
+	as.NLL[i] <- -logLik(
+		mle2(hollingNLL, start=list(h = 1/50), 
+				 fixed=list(a=as[i]), # fix a at whatever is in as[i]
+				 data=list(N=ReedfrogFuncresp$Initial, k=ReedfrogFuncresp$Killed)
+				 )
+		)
+}
+
+# plot of the NLL against all values of a
+qplot(as, as.NLL, geom = "line")		
+```
+
+So we can see how the NLL increases (gets worse) as we move away from the MLE of $a$ (= `r round(coef(holling2.fit)["a"], 3), but how do we find the cutoff with more precision that just eyeballing it? Well for a cutoff we refer to the 95th quantile of the $\chi^2$ distribution with 1 degree of freedom (see EMD pp 191-193 for the logic). But since we have two ends we need to divide this by two (i.e., for the 97.5th and 2.5th) which amounts to adding ~1.92 to the lowest NLL. 
+
+We can find our cutoff by adding this value of the chi-square distribution to the our NLL value: 
+```{r cutoff_a1}
+# The lowest NLL for our best-fit model is
+-logLik(holling2.fit)
+
+# The cutoff is this plus 1.92
+(cutoff <- -logLik(holling2.fit) + qchisq(0.95,1)/2)
+# Note that there is some other leftover stuff from the logLik call...
+```
+
+What values of $a$ are associated with our lowest NLL + 1.92? 
+```{r cutoff_a2}
+# find values of NLL within +/- 0.2 of the cutoff
+as.NLL[ as.NLL < cutoff + 0.2 & as.NLL > cutoff - 0.2 ]
+
+# find the values of "a" associated with these NLLs close to the cutoff
+as[ as.NLL < cutoff + 0.2 & as.NLL > cutoff - 0.2 ]
+```
+So it looks like our 95% confidence interval around $a$ goes from somewhere between 0.401 and 0.406 up to somewhere between 0.679 and 0.684. If you are fine with this level of precision (the cutoff comes from an approximation that only holds when n is very large after all!) then you've found your answer. If you want more precision, we will need to interpolate using the `approx()` function.
+```{r profileCI_a}
+# extract the NLLs on the left (lower) side of the curve, up to the minimum NLL
+as.NLL.lower <- as.NLL[1:which.min(as.NLL)]
+# and the values of "a"" associated with them
+as.lower <- as[1:which.min(as.NLL)]
+# feed them into the approx function
+approx(as.NLL.lower, as.lower, xout = cutoff)
+# and repeat for the right (upper) side of the curve
+as.NLL.upper <- as.NLL[which.min(as.NLL):length(as.NLL)]
+as.upper <- as[which.min(as.NLL):length(as.NLL)]
+approx(as.NLL.upper, as.upper, xout = cutoff)
+```
+So, more precisely, our 95% CI on $a$ is 0.4025 -- 0.6825! Again, you can simply repeat this process for the other parameter, $h$. In fact it would be a good exercise for you. You could even write your own function to do the tedious bits. But most the time you won't need to do this by hand. I wanted you to see the logic of the profile 95% CI, but the `bbmle` package has some extra magic in it. We can do all of this (for both parameters) with just a few function calls.
+```{r, warning=FALSE, fig.width=5, fig.height=4}
+plot(profile(holling2.fit))
+confint(holling2.fit)
+```
+
+(Note that the graph looks different---sharper---than the graph we made above. This is because this function plots the square-root of the deviance (difference from the minimum NLL), which is approximately normally distributed. See `vignette("mle2",package="bbmle")` for more if you like.) Spend a bit of time making sure you understand what was done to get those CIs and the plots. Do you see where on the y-axis the 95% CI line is? Why is that? Anyway, most of the time this it is sufficient to report these confidence intervals on your parameter estimates. And just like with regular 95% CIs, if they do not overlap with zero then your parameter is "significantly" different from zero. But remember, as with all of these frequentist approximations, they only work when n is large; that is they are _asymptotically_ correct. Also, these CIs (and the likelihood ratio tests we will see soon) work only when the MLE of the parameter is not near an edge of allowable parameter values (e.g., $h$ is not too close to zero). So caution is waranted when using these (or any!) approximations.
+
+
+2D Likelihood surfaces for two parameters at a time
+------------------------------------------------
+
+You probably would not be surprised to learn that the two parameters of our mode, $a$ and $h$, are not independent, but rather covary. With a little thought we might expect that if the attack rate is low, then the handling time would have to be low as well to fit the data. (Not sure you see that? Go back and try different combinations of parameters to see which types of combinations provide reasonable fit to the data.) In order to visualize (and thus better understand) the covariance of our parameters and to find the bivariate confidence limits, we need to plot a 2-dimensional likelihood surface.  
+
+Basically, we want to see how the likelihood changes as we change $a$ and $h$ simultaneously.  What we’ll end up with will look something like Figure 6.7. Also, since our model only has two parameters, we no longer need to use `mle2()`...there is nothing to optimize! We need only get the NLL for each combination of $a$ and $h$. If you were going to do this with a model that had other parameters, you would need to optimize the other free parameters.
+
+So we are going to create a dataset of all combinations of $a$ and $h$ (within reason) and then calculate the NLL of each.
+
+```{r bivariate}
+# create our vectors of "a" and "h" values
+a <- seq(0.3, 0.75, length = 50)
+h <- seq(0.0025, 0.030, length = 50)
+
+# this function will create a dataframe 
+# with all combinations of the variables you give it.
+df <- expand.grid(a=a,h=h)
+# add in a column to hold the NLL values
+df$NLL <- 0
+
+# the cycle through the rows in the dataframe 
+for(i in 1:dim(df)[1]){
+		# calculate the NLL given these params
+		df$NLL[i] <- hollingNLL(a = df$a[i], h = df$h[i], 
+													N = ReedfrogFuncresp$Initial, k = ReedfrogFuncresp$Killed)
+}
+
+# take a look to make sure it worked OK
+head(df)
+```
+
+
+Plot the 2D map using `geom_tile()`. We then use `scale_fill_gradient2()` to specify colors according to values of NLL. We use the limits to focus on values relatively close to the minimum NLL...if we don't the scale gets washed out since NLL values go well above 150. Also, remember that since we are using a _bivariate_ confidence interval, we need to use two degrees of freedom for the cutoff.
+
+```{r 2D, warning=FALSE, fig.width=6, fig.height=5}
+(cutoff <- -logLik(holling2.fit) + qchisq(0.95, 2)/2)
+
+ggplot(df, aes(x = a, y = h, fill = NLL)) +   
+	geom_tile(aes(fill = NLL), colour = "white") +   
+	scale_fill_gradient2(low = "red", mid = "white", high = "blue", 
+											 midpoint = cutoff, 
+											 limits = c(-logLik(holling2.fit), -logLik(holling2.fit)+6) )
+```
+
+So this gives us red values with lower values of our negative log-likelihood. Let's put in a contour line at the cutoff value (our NLL + 1.92) for the _bivariate_ confidence interval. Notice that we changed the degrees of freedom for the $\chi^2$ distribution. Lastly we add a point for the MLE of $a$ and $h$.
+```{r 2D_2,warning=FALSE, fig.width=6, fig.height=5}
+ggplot(df, aes(x = a, y = h, fill = NLL)) +   
+	geom_tile(aes(fill = NLL), colour = "white") +   
+	scale_fill_gradient2(low = "red", mid = "white", high = "blue", 
+											 midpoint = cutoff, 
+											 limits = c(-logLik(holling2.fit), -logLik(holling2.fit)+6) ) +
+	stat_contour(aes(z = NLL), breaks = cutoff) +
+	geom_point(aes(x = coef(holling2.fit)["a"], y = coef(holling2.fit)["h"]))
+```
+
+So what does this show us? Well, as we predicted, our fit depends on $a$ and $h$ together. We cannot change one without the other changing to compensate for it. We can get basically the same fit (NLL) by simultaneously increasing (or decreasing) $a$ and $h$. This is actually pretty common and is worth recognizing. In some cases you can avoid this correlation by reparmeterizing your model. But not always. Just be aware of it and be careful.
+
+
+Overview
+--------
+Let’s review the steps of what we just did:
+
+**Step 1.  Identify the response and explanatory variables**: Predation probability and Initial Population Size.  Just stating what the response and explanatory variables are will help you start modeling. Drawing the relationship  between them is even better
+
+**Step 2.  Specify the deterministic function**: Here it was the Holling type II.  We chose this function mechanistically, but we could have chosen different functions just by looking at the plot of the points.
+
+**Step 3.  Determine the stochastic distribution:** Here it was the binomial.  In this case, the stochastic distribution was easy to identify because we chose it mechanistically.  Other times it may not be so clear what the best distribution is, and looking at the histogram and plotting different distributions over the top will be helpful.
+
+**Step 4.  Specify the likelihood of the data given our deterministic expectations and the stochastic distribution**: We wrote this into our `hollingNLL()` function.  Our negative likelihood function combined the stochastic and deterministic elements together by having the stochastic parameter (in this case the binomial probability, $p$) be dependent upon the deterministic parameters of the Holling type II we modified to produce a per capita probability (a hyperbolic function).
+
+**Step 5.  Make a guess for the initial parameters**: $a$=0.5, $h$=1/50.  You need to have an initial guess at the parameters to make `mle2()` (or `optim()`) work, and we plotted the Holling curve to make our guess.  Sometimes you will also need to make a guess at the parameters for the stochastic distribution.  In these cases, the method of moments is the best option.
+
+**Step 6.  Estimate the best fit parameters using maximum likelihood**: We used `optim()` to search through combinations of parameters $a$ and $h$ to find the maximum likelihood estimates (MLEs) for those parameters that correspond to the minimized negative log-likelihood (NLL). The results were saved at `opt2`.
+
+**Step 7.  Add confidence intervals around your estimates**  We calculated some plug-in estimates to put confidence regions around your estimates based on the stochastic function.  We then calculated 1-dimensional profile confidence intervals and then a 2-dimensional likelihood surface. 
+
+Homework: Fit a Ricker model to the myxomatosis data
+----------------------------------------------------
+
+We went through, start to finish, one analysis of predation rates of tadpoles. The best way to make this stick is to do it again on your own, with a new data set. Your assignment is to analyze the myxomatosis data set in the `emdbook` package by trying to fit a Ricker model to these data. We will restrict our analyses just to Grade I (the most virulent) myxomatosis.
+```{r myxo, eval=FALSE}
+library(emdbook)
+data(MyxoTiter_sum)
+myxo <- subset(MyxoTiter_sum, grade == 1)
+```
+The analyses are analogous to what we just did (with a Ricker for a deterministic expectation and and Gamma for the stochastic distribution) so just adapt what we did (making sure  you understand it) and don't re-invent the wheel (unless you like that sort of thing). Bolker walks through this example (though his code is different from mine). If you get stuck, you can refer to the book, work with you fellow students, and even ask me questions. 
+
+I would like you to send me a figure of your best-fit line to the myxomatosis data as well as your MLEs and profile confidence intervals. 
