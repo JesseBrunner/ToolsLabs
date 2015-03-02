@@ -1,0 +1,315 @@
+---
+title: 'Testing hypotheses: confidence intervals, likelihood ratio tests, and Akaike''s
+  Information Criterion'
+author: "Jesse Brunner"
+date: "March 1, 2015"
+output: html_document
+---
+
+```{r setup, cache=FALSE, include=FALSE}
+library(knitr)
+# output <- opts_knit$get("rmarkdown.pandoc.to")
+opts_chunk$set(warning=FALSE, message=FALSE, cache=TRUE, fig.width=5, fig.height=4)
+```
+
+Our goals this week are to learn to test our statistical hypotheses using:
+
+1.  confidence intervals (see _last_ week)  
+2.  likelihood ratio tests, and  
+3.  Akaike's Information Criterion  
+
+A model and hypotheses
+----------------------
+
+Last week your homework was to fit a Ricker model to data on the titer of myxomavirus throughout infections. You only worked with data from the most virulent (Grade I) virus. This week we will consider the full data set. First, let's load the data and see what it consists of.
+```{r}
+library(emdbook)
+data(MyxoTiter_sum)
+myxo <- MyxoTiter_sum # shorter name to work with
+summary(myxo)
+```
+And then let's plot the data by grade.
+```{r}
+library(ggplot2)
+qplot(x=day, y=titer, data=myxo) + facet_wrap(~ grade) + geom_smooth()
+qplot(x=day, y=titer, data=myxo, color = factor(grade), 
+			fill = factor(grade)) + geom_smooth()
+```
+
+So it looks like grades 1, 3, & 4 might be somewhat similar, but grade 5 is quite different.
+
+
+Second, let us refresh our memories of what a Ricker function looks like mathematically:
+$$
+y = ax \times exp(-bx)
+$$
+
+and and graphed
+```{r}
+Ricker <- function(x, a, b){
+	a*x*exp(-b*x)
+}
+
+ggplot(data.frame(x=c(0,28)), aes(x)) +  
+	stat_function(fun=Ricker, geom="line", args=list(a=1, b = 1), color = "red") +
+	stat_function(fun=Ricker, geom="line", args=list(a=1, b = 0.2), colour="orange") +
+	stat_function(fun=Ricker, geom="line", args=list(a=2, b = 1), colour="blue") +
+	stat_function(fun=Ricker, geom="line", args=list(a=2, b = 0.2), colour="green") 
+```
+
+It looks like the peak of the Ricker is at $x = 1/b$ (try some of your own values to be sure). The height of the peak is determined by both $a$ and $b$ (I'll let you figure out the precise relationship). We thus have two parameters that can help us describe where along the x-axis the peak occurs (parameter $b$) and also how high the peack reaches (a combination of $a$ and $b$). This gives us some options in matching hypotheses about how viral titers change through time in the different grades with mathematical models.
+
+Let us write down five alternative hypotheses and their respective models:
+
+1.  Viral titers rise soon after exposure and then decline slowly over time
+    a.   in essentially the same way for each grade of virus.   
+$$
+y = a x \times exp(-bx)
+$$
+    b.  more virulent viruses reach higher titers than less virulent viruses, but at the same time.  
+$$
+y = a_{Grade} x \times exp(-bx)
+$$
+    c.   more virulent viruses reach their (same) peaks sooner than less virulent viruses.  
+$$
+y = ax \times exp(-b_{Grade}x)
+$$
+    d.   more virulent viruses reach higher peak titers, sooner.
+$$
+y = a_{Grade} x \times exp(-b_{Grade}x)
+$$
+
+2.  Viral titers rise soon after exposure, but do not decline until death. (Let's assume a Michaelis-Menton function.)
+$$
+y = \frac{ax}{b+x} 
+$$
+
+
+Fitting the five models to the data
+----------------------------------
+
+We can fit these models to the data fairly simply using Bolker's `mle2()`'s `parameter` option (look back a couple of weeks for an example, or just follow along). First, of course, we need to specify a function that gives us our negative log likelihood. 
+
+Bolker suggested using a gamma distribution for the errors since they are positive and slightly skewed high. The gamma distribution uses two paramters, a shape and a scale. It does not have a parameter for the mean (or expected value), but if you do some math, check out Bolker's book, or look at the help file for `dgamma`, you will see that the mean of the gamma is the scale times the shape parameter. We can thus calculate the mean titer (from the Ricker) and divide by the shape parameter to get the scale parameter (or vice versa). 
+
+```{r}
+gammaNLL <- function(a, b, shape, day, titer){
+  # calculate the deterministic expectation
+  meantiter = Ricker(x=day, a, b) # y=a*x*exp(-b*x)
+  
+  # then calculate the negative log-likelihood of the data given this expectation 
+  -sum(dgamma(titer, shape = shape,
+              scale = meantiter/shape, log=TRUE))
+}
+```
+
+We can the fit our basic model (model 1a) to the data pretty simply:
+```{r, warning=FALSE}
+library(bbmle)
+m1.a <- mle2(gammaNLL, start=list(a=3, b=1/7, shape=5), 
+					 data=list(day=myxo$day, titer=myxo$titer))
+m1.a
+```
+
+Because we want to use the `parameters` list in the `mle2()` function to make certain parameters (e.g., $a$) a function of some other variable (i.e., grade), we need to start using the formula interface. We can re-write our first model fit as:
+```{r, warning=FALSE}
+m1.a <- mle2(titer ~ dgamma(shape=shape, scale= a*day*exp(-b*day) /shape), 
+						 start=list(a=3, b=1/7, shape=5), 
+						 data=list(day=myxo$day, titer=myxo$titer))
+m1.a
+```
+
+You will see that all that has changed is that we specify the NLL not with our function, but using the formula on the first line. It says that the `titer` is gamma distributed with a shape parameter = `shape` and a scale parameter equal to the Ricker prediction (`a*day*exp(-b*day)`) divided by the shape parameter.
+
+If we use this formula interface notation, then creating model 1b (and the others) is pretty straightforward and does not involve creating new NLL functions.
+```{r, warning=FALSE}
+m1.b <- mle2(titer ~ dgamma(shape=shape, scale= a*day*exp(-b*day) /shape), 
+						 start=list(a=3, b=1/7, shape=5), 
+						 parameters=list(a ~ grade),
+						 data=list(day=myxo$day, titer=myxo$titer,
+						 					grade=myxo$grade)
+						 )
+m1.b
+```
+
+We do run up against a conceptual issue, here. As written (and interpreted by R), we are saying that the virus grades are continuous values such that there could be a grade of 1.23 and also that the difference between grades 1 and 2 is the same as that between 3 and 4. Does that seem like a good approach to you?
+
+Not knowing more about how these grades were defined, it would seem that these are categories more than measures. (Indeed, these grades are usually defined by Roman numerals rather than numbers.) In that case, we would probably want to treat `grade` as levels of a factor
+
+```{r, warning=FALSE}
+m1.b <- mle2(titer ~ dgamma(shape=shape, scale= a*day*exp(-b*day) /shape), 
+						 start=list(a=3, b=1/7, shape=5), 
+						 parameters=list(a ~ grade),
+						 data=list(day=myxo$day, titer=myxo$titer,
+						 					grade=factor(myxo$grade))
+						 )
+m1.b
+```
+
+Notice that this means that we have to estimate a lot more parameters this way! But also see that the differences between the values of $a$ for our intercept (grade I) and grades III and IV are pretty small while grade V is really quite different, which suggests that $a$ (and thus the height) does not change smoothly or linearly with increasing virus grades. In other words, it is probably more accurate to represent grades as categories.
+
+You will also see that the NLL of m1.b is rather smaller than that of m1.a. 
+```{r}
+-logLik(m1.a)
+-logLik(m1.b)
+```
+So m1.b is a better fit, but it also had three more parameters to vary to achieve that better fit. Adding extra parameters, even if they are tied to _random noise_, will improve the fit, if just a little bit. 
+
+```{r, warning=FALSE}
+-logLik(mle2(titer ~ dgamma(shape=shape, scale= a*day*exp(-b*day) /shape), 
+						 start=list(a=3, b=1/7, shape=5), 
+						 parameters=list(a ~ randomnoise),
+						 data=list(day=myxo$day, titer=myxo$titer,
+						 					randomnoise=runif(149))
+						 ))
+```
+See? It's a smidge better than m1.a with this extra noise parameter. So the question is, is m1.b's fit better than we'd expect by chance? We will get back to this question soon---I just wanted to introduce the question in this simple case---but first let's fit the rest of the models.
+
+
+```{r, warning=FALSE}
+m1.c <- mle2(titer ~ dgamma(shape=shape, scale= a*day*exp(-b*day) /shape), 
+						 start=list(a=3, b=1/7, shape=5), 
+						 parameters=list(b ~ grade),
+						 data=list(day=myxo$day, titer=myxo$titer,
+						 					grade=factor(myxo$grade))
+						 )
+m1.c
+
+m1.d <- mle2(titer ~ dgamma(shape=shape, scale= a*day*exp(-b*day) /shape), 
+						 start=list(a=3, b=1/7, shape=5), 
+						 parameters=list(a ~ grade, b ~ grade),
+						 data=list(day=myxo$day, titer=myxo$titer,
+						 					grade=factor(myxo$grade))
+						 )
+m1.d
+```
+
+The last model, m2, requires a different functional form; that of the Michaelis-Menton. Also note that we are not letting any parameters vary with grade.
+```{r, warning=FALSE}
+m2 <- mle2(titer ~ dgamma(shape=shape, scale= (a*day/(b+day)) /shape), 
+						 start=list(a=7.5, b=1, shape=5), 
+						 data=list(day=myxo$day, titer=myxo$titer)
+						 )
+m2
+```
+
+Testing hypotheses with confidence intervals
+--------------------------------------------
+
+So we have these five models fit to the data, but now we want to know what they can tell us. Model m1.b, for instance, allowed $a$ to vary with grade, which mean that the _height_ of the curves could change, but not the timing or shape of the curve. So is this a good fit? Are these extra parameters account for real differences?
+
+One way to tell whether a predictor in your model is "significant" is to see if the confidence interval on its parameter is significantly different from zero. We do this a lot in regression. Is, for instance, the slope significantly different from zero? Does it's confidence interval include or exclude zero? We can use the same appoach here:
+```{r, warning=FALSE}
+confint(m1.b)
+```
+You will see that the 95% CIs of the parameters `a.grade3` and `a.grade4` _do_ encompass zero, which means that they are not significantly different from the value of $a$ for the baseline (intercept) grade (grade=1). The last grade, though, has a parameter that _does not_ include zero; it's value of $a$ is significantly different from the baseline grade!
+
+So if our question is, does the height of the curves (the maximum titers) differ between grades?, our answer is, grade 5 differs from grade 1; the other grades do not. This approach does not,  however, answer the question of whether there is an overall significant effect of grade on the height of the curves (maximum titers). For this, we want to compare the fit of models with and without this effect included. (If there were only one parameter for `grade`, as we started with assuming that `grade` was a continuous variable, then the results would be the same. Here there is no single parameter for the effect of `grade`, so the results can differ between the two approaches.)
+
+Testing hypotheses with likelihood ratio tests
+---------------------------------------------
+
+A likelihood ratio test tests whether the difference in deviance between two models, one that is nested within the other, is likely do to chance. (Deviance = $2 \times$ NLL.) It is a classic frequentist, P-value yeilding test. The difference in the deviance between two nested models is (asymptotically) distributed as a $\chi^2$ with degrees of freedom equal to the difference in the number of paramters between the two models. Let us walk through this:
+```{r}
+# deviance of the first model
+-logLik(m1.a)*2
+# deviance of the second model
+-logLik(m1.b)*2
+# difference in the deviances
+-logLik(m1.a)*2 - -logLik(m1.b)*2
+
+# Since there there is a difference of 6-3 = 3 paramters 
+# between the two models, we will use 3 degrees of freedom
+pchisq(48.89, df=3, lower.tail=FALSE)
+```
+We can get the same test a bit more succinctly with:
+```{r}
+anova(m1.a, m1.b)
+```
+So our likelihood ratio test says that it is exceedingly unlikely that we would get a difference in deviance of 48.89 or larger by chance if the models were, in fact, equivalent (i.e., if grade was actually unrelated to $a$). In other words, _not_ allowing $a$ to vary with the grade makes the fit of the model significantly worse. 
+
+We can also make other pairwise comparisons of the models m1.x:
+```{r}
+anova(m1.a, m1.c)
+```
+So letting parameter $b$ to vary with grade is also a significant improvement over the model with both $a$ and $b$ fixed. 
+```{r}
+anova(m1.b, m1.d)
+anova(m1.c, m1.d)
+```
+It also appears that a model allowing _both_ $a$ and $b$ to vary with grade fits significantly better than allowing just one of these paremeters to vary. Indeed, if we look at the confidence intervals on the parameters of this "full" model we see that most every parameter is significantly different from zero.
+```{r}
+confint(m1.d)
+```
+
+What if we got different answers when we compared m1.d with m1.b and m1.c? That is, what if the full model was not significantly better than one model, but was significantly different from the other?  These two models with a single parameter varying with grade are both nested in the full model with both parameters varying, but which comparison would you trust? Similarly, how can you compare models m1.b and m1.c? And what about comparing our m1.x models with m2, which has a different functional form entirely? 
+
+In short, you cannot. You can only compare nested models with likelihood ratio tests. So let's move on to AIC.
+
+Testing hypotheses (or comparing models) with AIC
+---------------------------------------------
+
+In a broad sense we are interested in how well a model fits the data, which we measure with negative log-likelihood (or before with sums of squares), but we want to keep our models as simple as possible. We saw earlier that including even a random variable improved the fit of the model simply because it gave the model another free parameter to use. So we want a metric of model fit discounted by model complexity. The solution is Akaiki's information criteria (AIC). 
+$$
+AIC = -2\times ln(\mathcal{L}) + 2k,
+$$
+where $\mathcal{L}$ is the likelihood (and hence the left part is simply twice the negative log likilihood) and $k$ is the number of parameters in the model, including, for instance, the parameters of the stochastic distribution. 
+
+We'll side-step the theory of why this works for the moment, but in general we can see that there is a fit part and a penalty for complexity. The idea is that models with lower AIC values are a better, more reasonable fit than models with higher AIC values. The actual values of AIC are not very useful, but the differences in AIC are. If differences in AIC ($\Delta AIC$) are within 2 or 3, one generally concludes that models are more or less equivalent, that there is no evidence that one is better than the other. With differences of 5 or more, the model with the lower AIC is better, and when differences are greater than 10, the model(s) with the worse AIC value are considered very poor, probably worth discarding all together.
+
+Let us illustrate with models m1.a-c. 
+```{r}
+# model m1.a; remember the 'log Lik' and '(df=3)` are leftover from the logLik() call
+(a <- -2*logLik(m1.a) + 2*3)
+
+# model m1.b
+(b <- -2*logLik(m1.b) + 2*6)
+
+# model m1.c
+(c <- -2*logLik(m1.c) + 2*6)
+
+a-b # difference between m1.a and m1.b
+a-c # difference between m1.a and m1.c
+b-c # difference between m1.b and m1.c
+```
+So it looks like of the three model, model m1.c is the best, by a long-shot. To make this clearer we can use some built-in functions
+```{r}
+AIC(m1.a, m1.b, m1.c)
+AICtab(m1.a, m1.b, m1.c, base = TRUE)
+```
+This makes it clear that while model m1.b is much better than m1.a, m1.c is by far superior.
+
+There are, of course, some caveats. First, AIC, like all statistics it seems, assumes a large sample size (and a few other things we need to dicuss in class). There is, however, a small-size corrected version of AIC:
+$$
+AICc = AIC + \frac{2k(k+1)}{n-k-1}
+$$
+
+We can get these values pretty simply with:
+```{r}
+AICctab(m1.a, m1.b, m1.c, base = TRUE, nobs = 149)
+```
+In this case, it doesn't change our results that much, but with smaller sample sizes the AICc metric becomes more and more conservative, so more complex models have to be _much_ better fits to make up for steep penalties for extra parameters.
+
+Within a set of models, we can calculate evidentiary _weights_ for each model, which add up to one. The weight,
+$$
+w_i = \exp \left( \frac{(AIC_{min} - AIC_i)}{2} \right)
+$$ is the relative likelihood of model $i$. This is useful because you can sum up the weights for similar models or models that meet certain criteria (e.g., you could add up the weights of models that allowed parameter $b$ to vary) to establish their combined support amongst the models. 
+
+Again, these values are easy to obtain by hand or with:
+```{r}
+AICctab(m1.a, m1.b, m1.c, base = TRUE, nobs = 149, weights = TRUE)
+```
+
+And we can easily construct the same table for the full set of models, including the model with a different functional form!
+```{r}
+AICctab(m1.a, m1.b, m1.c,  m1.d, m2, base = TRUE, nobs = 149, weights = TRUE)
+```
+So it is clear that the "full" model, with both $a$ and $b$ varying with grade is by far the best model (of this set); the other models are very distant runners up and could probably be ignored out of hand. Model m2, however, is surprisingly good. It would be interesting to try different versions of m2 allowing it's parameters to vary! In fact...
+
+Homework
+-------
+
+Your homework is to fit and contrast the four versions of model 2, the Michaelis-Menton, to the data allowing the parameters $a$ and $b$ (or both) to vary with `grade`. (Remember that while they share names, these parameters have different functions in the Ricker and M-M models!)  All I want from you is an AICc table with weights and a figure showing the best-fit model and the data. 
+
+
+
