@@ -1,0 +1,506 @@
+---
+title: "Simulation and Power analysis"
+author: "Jesse Brunner"
+date: "March 16, 2015"
+output: html_document
+---
+
+```{r setup, cache=FALSE, include=FALSE}
+library(knitr)
+# output <- opts_knit$get("rmarkdown.pandoc.to")
+opts_chunk$set(warning=FALSE, message=FALSE, cache=TRUE, tidy=TRUE, fig.width=5, fig.height=4)
+```
+
+
+
+Our goals in this lab are to learn to simulate data to: 
+
+1.  “sharpen your intuition and test your estimation tools,” 
+2.  understand how sample size and sampling design influence our ability to detect differences among treatments, populations, etc. (i.e., Power) 
+3. bracket uncertainty in a process of interest, such as by deriving bootstrapped confidence intervals around parameter estimates. 
+
+The basics: simulating data from a linear model
+---------------------------
+
+In previous labs we have explored deterministic functions, stochastic probability distributions, and seen how to fit and compare models in a likelihood framework. That accounts for a lot of what you will need to do in your analyses, but simulating data can complement the process in numerous ways. At a minimum it can be useful to see what data would look like if they fit your expectations...there have been many cases where just taking this one step has made me rethink my ideas and experiments. More formally, we may want to simulate data from different experimental designs to find the optimal (or at least adequate) design that balances logistics (e.g., numbers of animals, time, expense) and Power (the ability to _detect_ a difference in means or models if there really _is_ one). We might also want to know whether we can estimate parameters of interest accurately (i.e., without bias) and precisely (i.e., with little variation). After the experiment has been done and you may want to calculate your power to detect differences _post hoc_ to determine whether we should put much faith in an observed lack of difference. (For example, I once developed a clever way to statistically testing where there was an influence of co-feeding on transmission of _Borrelia burgdorferi_. I applied this to data an undergraduate had collected and found surprisingly little evidence of an effect. We had the paper written up and in revision before I bothered to think, _What sort of difference could we detect with this method?_. When I simulated data a bunch of times and applied my model to it over an over again, I found that we had very little chance of detecting real differences. In other words, our power was very low, and the publication was pulled. The lesson is not to avoid doing post-hoc power analyses, but rather it is better to do them beforehand!) 
+
+So let us begin with a very simple example, one where we have a solid intuition for how things should work. Let’s assume our ecological process of interest can be represented by a linear model with normally distributed errors (e.g., productivity as a function of nitrogen concentration over a small range). Our mathematical formula is:
+$$
+  Y \sim \text{Normal}(a+bx, \sigma^2)
+$$
+
+which means that $Y$ is a random variable drawn from a normal distribution with mean $= a + bx$ and variance $\sigma^2$. Let's the assume that our research question involves determining whether there is a positive slope. We want to know whether our experimental design will allow us to detect slopes that are significantly different from zero (which is generally what people do with simple linear regressions).
+
+To simulate data under this model we will first calculate the deterministic process/dynamics/outcome (i.e., the linear model), and then simulate the random data given this expectation. 
+
+First, let's set up a vector of $x$-values and specify the parameters of interest, $a$ and $b$:
+ 
+```{r x}
+x <- 1:20
+a <- 2 # intercept
+b <- 1 # slope
+```
+
+An then the deterministic expectation is:
+
+```{r ydet}
+( y_det <- a + b * x)
+```
+
+Next, to get our simulated "data" we need to add some stochastic noise to the deterministic expectations (i.e., the expected value or mean for each value of `y_det`) with the `rnorm()` function. The basic syntax is `rnorm(n, mean = 0, sd = 1)` and again, the mean is our expected value or `y_det`. 
+
+To generate 20 random normal deviates with the mean equal to the deterministic equation and $sigma$ = 2 we can write:
+```{r set.seed, echo=FALSE}
+set.seed(1001)
+```
+
+```{r rnorm.1}
+y <- rnorm(n=length(y_det), mean = y_det, sd = 2)
+```
+or alternatively, we could achieve the same results with:
+```{r rnorm.2}
+y <- rnorm(n=length(y_det), mean = a + b * x, sd = 2)
+y
+```
+
+Just to be clear, let's see how the stochastic version of our simple model differs from the deterministic one. Plot your simulated observations and then add a best-fit linear regression line to those points. You can then add a line for the "True" relationship (your deterministic function) to see how a function estimated from a given set of observations might deviate from the true function. 
+
+```{r rnorm_2_plot, fig.width=5, fig.height=4}
+library(ggplot2) 
+qplot(x, y, geom="point") + geom_smooth(method = "lm", color = "blue") + 
+	geom_line(aes(y=y_det), color = "red")
+```
+
+Not bad! The linear regression fit to the data are very close to the True relationship. We can get the statistics for this line using the built-in R function, `lm()`. (Note: I know that we have been using likelihood to fit models in all previous examples, but for simplicity at the moment, let's just use the machinery available to us to focus on the mechanics of simulating data and power analyses.) 
+
+```{r lm.1}
+summary( lm(y ~ x) )
+```
+We can see that the estimates of the parameters $a$ (=`intercept`) and $b$ (=`x`, since it's the effect of $x$ on $y$) are very close, within a standard error of the "True" values. 
+
+We can construct confidence intervals more formally by remembering that the confidence intervals are  $\approx \bar{x} \pm 1.96\times\sigma/\sqrt{n}$. Where does the $1.96$ come from? Remember, we want 5% in the tails of the distribution, 2.5% in each side. We can use the quantile function to tell us what values along the x-axis are associated with the 2.5% and 97.5% quantiles.
+
+```{r qnorm}
+# The 97.5th percentile 
+qnorm(1 - 0.05/2)
+# and the 2.5th percentile of the normal
+qnorm(0.05/2)
+```
+
+We can then use this information to calculate the confidence intervals on the parameters $a$ and $b$.
+```{r confint.1}
+# a
+2.251 + 1.96*1.234
+2.251 - 1.96*1.234
+# b
+0.989 + 1.96*0.103 
+0.989 - 1.96*0.103 
+```
+
+Or alternately, we can use the built-in `confint()` function, which does the work for us.
+```{r confint.2}
+confint( lm(y~x) )
+```
+You will notice, however, that this provides different, wider confidence intervals than what we just calculated ourselves. Why? Well, for `lm()` models, `confint()` correctly uses the critical values from the _t_-distribution. As you may well remember, the _t_-distribution converges on the standard normal (with mean = 0 and sd = 1) when the degrees of freedom is large. In our case, with df = 20 - 2, the proper confidence intervals will be a bit wider. (Try it yourself using `qt()` for the _t_-distribution and see if you can match the output from the `confint()` function.) Anyway, back to the more important point...
+
+If we were to run this process again, how many times would you expect simply by random chance that we’d estimate parameters different from our true model? What if you increased the standard deviation, say to $\sigma$ = 6? Or decreased you slope by half? Give it a shot! Here is one example:
+
+```{r lm_s6_plot, fig.width=5, fig.height=4, message=FALSE}
+qplot(x, y = rnorm(20, mean = a + (b/2) * x, sd = 6)) + 
+	geom_smooth(se = F, linetype = 2) + 
+	geom_smooth(method = "lm", color = "blue") + 
+	stat_function(fun = function(x) a + (b/2)*x, color = "red")
+```
+
+Try repeating this a bunch of times. Do  you always get the "right" answer? If you didn't know what the right answer was, would you always assume that a linear model was the best choice? Consider the different biological interpretations that could mean. Troubling isn’t it?!
+
+
+Power analysis of a linear model
+---------------
+
+You now have (almost) all of the basic tools you'll need to calculate power, bias, and other useful metrics. All that is left is to do what we just did hundreds of times, while systematically varying quanties of interest (e.g., the slope or sample sizes). OK, we probably don't want to do this by hand. Time to (re)learn how to loop through values of things, over and over.
+
+So let's imagine that we are planning an experiment, like we simulated above, with 20 equally-spaced values of our predictor ($x$) and we want to see:
+
+1. How likely we are to correctly say that the slope is significantly different from zero (i.e., correctly reject the null hypotheses; this is the classic definition of power), and
+2. Whether we correctly recover the True value of the slope (b = 1).
+
+What this means, in practice, is that we simulate our experimental data, fit a linear model to it, and keep both the P-value (for aim 1) and estimate of the slope (for aim 2), then repeat this a bunch of times.  
+
+*We will build up the function in layers.* So what you will see first is a skeleton of the function, and then we will fill in the necessary code in several steps.  
+
+First, let's specify what parameters the function will take and what it will return. In our case, we will give it a set of x-values, an intercept, a slope, a standard deviation, and the number of simulations to run. I've given everything a default value that matches our example above. We need only supply the vector of x-values. At the end, the function will return a data frame with a column of P-values (`pvals`) and a column with the estimates of the slope (`slopes`). Of course we need to store those values somewhere inside the function, so I create two numeric vectors of the appropriate length. 
+
+```{r est_lm_power.fxn.1, eval=FALSE}
+est_lm_power <- function(x, intercept = 2, slope = 1, sd = 5, nsim = 500){
+
+	# create two vectors to store the p-values 
+	# and estimates of the slope from each simulated experiment
+	pvals <- slopes <- numeric(length = nsim)
+
+	return( data.frame(pvals, slopes) )	
+	
+}
+```
+
+Next, we need our function to create the deterministic expectation and then add the appropriate amount of noise to it to create our fake data. We need only create the deterministic expectation once, but we want to create many (n = `nsim`) sets of fake data, so I put the fake data creation stuff inside a loop. 
+```{r est_lm_power.fxn.2, eval=FALSE}
+est_lm_power <- function(x, intercept = 2, slope = 1, sd = 5, nsim = 500){
+	
+	# create two vectors to store the p-values 
+	# and estimates of the slope from each simulated experiment
+	pvals <- slopes <- numeric(length = nsim)
+	
+	# calculate the deterministic expectation
+	# Note that x must be provided by the user; it remains the same in each iteration
+	y_det <- intercept + slope * x
+	
+	# each of the nsim loops is a simulated experiment
+	for(i in 1:nsim){
+		
+		# create simulated data with noise determined by sd
+		y <- rnorm(n=length(x), mean = y_det, sd = sd)
+	}
+
+	return( data.frame(pvals, slopes) )	
+	
+}
+```
+The `for(i in 1:nsim){}` is a loop that starts at `i=1`, runs whatever is in the curly brackets, then increments `i` to `i=2`, runs the stuff in the curly brackets, and on an on through `i=nsim`. It's useful to remember that the value of `i` actually changes. We will use this to index our results in the next chunk of code. (It is also worth noting that there are other control-flow structures, including `while(condition){}`, `if(condition){}`, and `switch(expression, alt1, alt2, ...)`. The [R] language is much more efficient if you avoid these constructs, but sometimes they are just plain helpful! )
+
+The last step in our function is to fit a regression model to our fake data and extract the P-value and estimate of the slope from it. The first part just uses the `lm()` function, as we've seen. The second part uses the `coef()` function, which helpfully extracts the coefficients of the regression model, along with their standard errors, t-test values, and P-values. We simply select the row we want (that for "x") and the correct columns. If you don't understand what I'm extracting, try fitting a regression to one set of made up data and then using the `coef(summary())` function on it. 
+```{r est_lm_power.fxn}
+est_lm_power <- function(x, intercept = 2, slope = 1, sd = 5, nsim = 500){
+	
+	# create two vectors to store the p-values 
+	# and estimates of the slope from each simulated experiment
+	pvals <- slopes <- numeric(length = nsim)
+	
+	# calculate the deterministic expectation
+	# Note that x must be provided by the user. It remains the same in each iteration
+	y_det <- intercept + slope * x
+	
+	# each of the nsim loops is a simulated experiment
+	for(i in 1:nsim){
+		
+		# create simulated data with noise determined by sd
+		y <- rnorm(n=length(x), mean = y_det, sd = sd)
+
+		# fit the linear regression model
+		model <- lm(y~x)
+
+		# extract the p-value for the regression slope ("x")
+		pvals[i] <- coef(summary(model))["x","Pr(>|t|)"]
+		# and the estimated slope for "x"
+		slopes[i] <- coef(summary(model))["x","Estimate"]
+	}
+
+	return( data.frame(pvals, slopes) )	
+	
+}
+```
+
+So what proportion of times do we correctly reject the null hypothesis? That is, what is the power of our experiment?
+
+```{r power.1}
+p1 <- est_lm_power(x)
+summary(p1)
+```
+
+So how likely are we to correcty say that the slope is significantly different from zero? That is, what proportion of the P-values are less than our cutoff of $\alpha = 0.05$? 
+
+```{r}
+with(p1, sum(pvals < 0.05) / length(pvals)  )
+```
+Wow! That's pretty good! We are almost certain to correctly reject the null hypothesis, provided the underlying model and variance are accurate! 
+
+What about our estimate of the slope? Do we do a good job of estimating the slope?
+```{r slope_1, fig.width=5, fig.height=4}
+qplot(slopes, data = p1, binwidth=0.05)
+```
+
+That's not bad, either! And looking above to the summary of `slopes` we see that fifty percent of the time (the middle two quartiles) we are within 0.15 of the "True" value. Moreover, our mean and median are very nearly 1, which is to say that our estimate doesn't seem to be biased and even with a sample size of just 20 we have pretty good precision.  
+
+But what if we were interested in smaller slopes? How small a slope could we detect with reasonable confidence? Back to our simulations!
+
+Since we already have a function that simulates an experiment a whole bunch of times given a set of parameters (`est_lm_power()`), why don't we simply feed this function a bunch of values for the slope?
+
+```{r est_lm_power_slope}
+est_lm_power_slope <- function(x, intercept=2, slope=seq(0,2, length=5), sd=5, nsim=500){
+	
+	# set up the results data frame
+	results <- data.frame(pvals=numeric(), slopes=numeric(), true_slope=numeric())
+	
+	# loop through all of the slope values
+	for(i in 1:length(slope)){
+		# get the results from the nsim "experiments"
+		current_results <- est_lm_power(x, intercept=intercept, slope=slope[i], sd=sd, nsim=nsim)
+		
+		#add a column to the data frame with the true slope
+		current_results$true_slope <- slope[i]
+		
+		# add the results from the current loop to the master results data frame
+		results <- rbind(results, current_results)	
+	}
+
+	return(results)
+}
+```
+You will notice that this function takes the same inputs, only `slope` is now a vector of slope values. We can thus change any of the particular values within the simulation if we wish. Since the `est_lm_power()` function returns a data frame, our function simply takes that data frame and adds it to the bottom of the growing `results` data frame.
+
+Actually running the simulation is simple, because it is a function with nice defaults.
+```{r}
+p2 <- est_lm_power_slope(x, slope = seq(0,1, length = 11))
+summary(p2)
+```
+What is our power, by True slope? (We have at least two ways to figure this out with a minimum of code)
+```{r}
+with(p2, tapply(pvals, true_slope, FUN = function(x) sum(x < 0.05) / length(x) ) )
+# Or alternatively, if you're into the dplyr functions
+library(dplyr)
+summarise( group_by(filter(p2, pvals < 0.05), true_slope), 
+					power = n()/500
+					)
+```
+Plotting power as a function of the slope is informative. (Note that we are using `stat_summary()` to do the calculation for us.)
+```{r power_2, fig.width=5, fig.height=4, cache=TRUE}
+p <- ggplot(data = p2, aes(x = true_slope, y = pvals))
+p + stat_summary(fun.y = function(y) sum(y < 0.05)/length(y), geom = c("point", "line")) + 
+	labs(y="Power")
+```
+
+So, as we'd expect, if the true difference in slope from zero is small, we have fairly low power to detect that difference. We have reasonable power down to True slopes of 0.6 or 0.7 (a common, if arbitrary cuttoff for reasonable power is 80%). Of course how small a difference is important is up to you to determine!  (Also, it is worth noting that even when there is _no_ difference, we observe a power > 0. Think about why that is.) But there we go, our first power analysis!
+
+********
+
+You probably won't be surprised to learn that [R] has several built in functions for calculating traditional power for common experimental designs/statistics:
+
+function             | notes
+-------------------- | -------------
+`power.t.test()`     | tests difference between means of two normal populations
+`power.prop.test()`  | tests difference in proportions
+`power.anova.test()` | tests for a balanced, one-way ANOVA
+
+But for more complicated and ecologically realistic examples (i.e., most of the time) you’ll need to find the answer through simulation.
+
+*******
+
+
+A more complicated example: simulating data from a _non_-linear model
+---------------------------
+
+Most ecological processes we will encounter will be non-linear, so let’s return to our now familiear example of functional responses (e.g., type I and II). The basic approach is the same, but we will use both Holling type I and type II functional responses as our deterministic models and a binomial stochastic distribution, like in Lab 7 (and the `ReedfrogFuncresp` data in Bolker's book). Our data ($Y$ = the number of tadpoles consumed) are thus distributed as:
+
+$$
+	 Y \sim \text{Binom}(P = \frac{a}{1+ahN}, N),
+$$
+where $a$ is the attack rate, $h$ is the handling time, and $N$ is the number (or density) of tadpoles at risk of being eaten. 
+
+We will also use the same likelihood-based methods as we used previously to fit the models to each made up data set and AICc to compare the fit of each model. Our question is how many replicate observations we need at each prey density to ensure reasonable power of differentiating the type I from the type II models, assuming that the type II model is True.
+
+**Step 1: Simulate Data.** To simulate data, we first need to define our parameters. For fun let's use our best-fit, MLE values for $a$ and $h$ that we discovered in lab 7. 
+```{r setpars}
+# MLEs from Lab 7
+a <- 0.5266
+h <- 0.0167
+# The experimental design of Bolker and Vonesh
+N <- rep(c(5,10,15,20,30,50,75,100), each=2) 
+```
+
+We can then calculate the deterministic expectation for the set of densities/treatment levels, given our values of $a$ and $h$:
+```{r y_det}
+probs <- a / (a + a*h*N)
+# It's always a good idea to graph along the way to make sure you
+# know what you're doing.
+qplot(x=N, y=probs*N)
+```
+
+Next, given these deterministic expectations (here, probabilities of being eaten!) we can simulate actual data on the number of tadpoles eaten at each density:
+```{r sim_y}
+y <- rbinom(n=length(N), prob=probs, size=N)
+```
+
+Again, your values will differ from mine due to their being random draws.
+Plot your simulated data. What kind of a function would you fit to them if you didn't know the "True" underlying function? Give it a shot, then add the determinisitic line to your plot.
+
+```{r sim_y_plot, fig.width=5, fig.height=4}
+qplot(x=N, y=y) #+ stat_function(fun = function(N) a*N / (a + a*h*N))
+```
+
+
+**Step 2: Fit Models to Data.** We have two models we want to fit to our data, and compare their relative fit using AICc. I am going to go through this quickly since we've already seen the mechanics of it. (If you get lost, return to lab 7.)
+
+First we define our negative log-likelihood function for each model (Note that we recover the type I model by setting $h=0$ in the type II model.)
+```{r NLL}
+holling2NLL<-function(N, k, a, h){
+	# calculate the deterministic expectation
+	predprob = a /(1+a*h*N)	
+	# then calculate the negative log-likelihood of the data given this expectation 
+	-sum(dbinom(k, prob=predprob, size=N, log=TRUE))
+}
+
+holling1NLL<-function(N, k, a){
+	# calculate the deterministic expectation
+	predprob = a 
+	# then calculate the negative log-likelihood of the data given this expectation 
+	-sum(dbinom(k, prob=predprob, size=N, log=TRUE))
+}
+```
+
+Then we can fit both models to the data:
+```{r fit, warning=FALSE}
+library(bbmle)
+fit2 <- mle2(holling2NLL, start=list(a = 1/2, h = 1/20), 
+						 data=list(N=N, k=y),
+						 method="Nelder-Mead" # had problems with default BFGS choosing neg values of h
+						)
+fit1 <- mle2(holling1NLL, start=list(a = 1/2), 
+						 data=list(N=N, k=y)
+						)
+```
+
+It is worth seeing what the two models yeild:
+```{r}
+fit2
+fit1
+```
+It looks like the Holling type II is a much better fit, but let us use a common metric to be consistent:
+```{r}
+AICc(fit1, nobs=sum(N)) - AICc(fit2, nobs=sum(N))
+```
+With a difference in AICc values of over `r floor(AICc(fit1, nobs=sum(N)) - AICc(fit2, nobs=sum(N)))`, the weight of evidence is certainly behind the Holling type II. This is, of course, just one simulated dataset, though. Would we expect to choose correctly most of the time? What if we dropped the sample size down to one observation per level of density? Similarly, how precisely and accurately would we expect to estimate the True parameters?
+
+
+**Step 3: Automate Steps 1 & 2.** We want to repeat this general approach on a whole bunch of made up data sets. As before, we will create a function that takes the true parameters as well as a vector of x-values (initial densities) and then simulates a bunch of datasets, each time fitting the two models and comparing their fit. (We will then create _another_ function to feed our power-estimating function different experimental designs.) You will notice that I've simply copied in the relevant commands from above into my function; I know it works, so why change it?
+
+```{r power_Holling}
+est_power_holling <- function(N, a=0.5266, h=0.0167, nsim=500){
+	
+	# set up the results data frame
+	results <- data.frame(delta=numeric(nsim))
+	
+	# calculated the predicted predation probabilites 
+	# across the initial densities in N
+	probs <- a / (a + a*h*N)
+	
+	# loop through all nsim simulations
+	for(i in 1:nsim){
+		# Simulate our data
+		y <- rbinom(n=length(N), prob=probs, size=N)
+		
+		# fit both Holling I and II models
+		fit2 <- mle2(holling2NLL, start=list(a = 1/2, h = 1/20), 
+								 data=list(N=N, k=y),
+								 method="Nelder-Mead" # had problems with default BFGS choosing neg values of h
+								 )
+		fit1 <- mle2(holling1NLL, start=list(a = 1/2), 
+								 data=list(N=N, k=y)
+								 )
+		
+		# calculate difference in AICc & put it in the right place
+		results$delta[i] <- AICc(fit1, nobs=sum(N)) - AICc(fit2, nobs=sum(N))
+		
+		} # end loop through nsim
+	
+	return(results)
+}
+```
+
+Now, let's try estimating power for the design that Vonesh & Bolker used (the one in the vector, `N`), both to check to see if my code works, but also because I'm curious.
+
+```{r}
+VB_design <- est_power_holling(N=N) #using defaults, which are Vonesh & Bolker's
+
+# plot a histogram of differences in AICc
+qplot(delta, data=VB_design)
+```
+
+So our code seems to have worked and so did Vonesh and Bolker's design! That is, if they wanted to determine whether a type I or type II model fit better (assuming the data were binomially distributed with a probability coming from a type II functional response), they would virtually always find strong support for the True model (all $\Delta$ AICc > 20). But was their design overkill? Could they have gotten away with just one replicate per density? Or fewer levels of density? With our basic machinery we can address these questions pretty easily. First, let's just see what the power would be if we had only a single replicate at each density.
+
+```{r}
+reduced_design <- est_power_holling(N=c(5,10,15,20,30,50,75,100))
+
+# plot a histogram of differences in AICc
+# overlaying the reduced design on the previous graph
+qplot(delta, data=VB_design) + 
+	geom_histogram(data=reduced_design, fill="red", alpha=0.5) + 
+	geom_vline(xintercept=10)
+```
+
+So assuming that we get the right answer if $\Delta$ AICc $\geq$ 10 (the vertical line), we would still have pretty substantial power to differentiate Holling I and II models. 
+
+We could try different values of our parameters ($a$ and $h$) to see how they influence our power, similar to what we did in the previous example, but let's instead try exploring three different experimental designs with varying density treatments. This provides a nice example of how you can use lists to make your functions more flexible. 
+
+Let us pretend that we have three experimental designs we want to explore. We want to maximize our power while minimizing the the number of animals involved. The first design is just using (almost) equally-spaced densities (with eight treatments, this would be densities of 5, 19, 32, 46, 59, 73, 86, and 100, for a total of 420 animals). The second design involves more levels of density at the low end and fewer at the upper end (5, 10, 15, 20, 25, 50, 75, and 100, for a total of 300 animals). The last design has more levels in the middle, where we might expect the infection to be, but extends the range of densities a bit (5, 15, 25, 35, 45, 55, 85, 125, for a total of 390 animals). 
+
+We want to create a function that can take these vectors of numbers (experimental designs) and loop over them, calculating the power of each. Ideally our function can take any number of vectors to loop over. So instead of providing a vector of values (or several vectors), we want our function to take a _list_ of vectors.
+
+```{r}
+est_power_holl_designs <- function(designs, a=0.5266, h=0.0167, nsim=500){
+	
+	# create datafram to hold the designs and output (deltas)
+	output <- data.frame(design=character(), delta=numeric())
+	
+	# loop through designs
+	for(i in 1:length(designs)){
+		
+		# print the current design, nsim times
+		design <- rep(as.character(designs[i]), nsim)
+		# get the deltas from the power function for the current design
+		delta <- est_power_holling(N=designs[[i]], a=a, h=h, nsim=nsim)
+		
+		# put these into a temporary data frame
+		temp <- data.frame(design=design, delta=delta)
+		
+		# bind this temp data frame to the bottom of the output dataframe
+		output <- rbind(output, temp)
+	}
+	
+	return(output)
+	
+}
+```
+
+You will see that things work the same as before, but now we use a list, and each element of the list is a vector of initial densities. We index lists using the double brackets notation, `[[i]]`, but you will see that in the `as.character()` call, we only used a single bracket. This is for a reason. We want to turn the whole element in slot one of the list into a character string, not each element of whatever is in that slot. This will probably make more sense if we just demonstrate the difference. 
+
+Here is our list of designs. (Note, this could be shorter or longer and our function would still work.) 
+
+```{r}
+N_designs <- list(c(5, 19, 32, 46, 59, 73, 86, 100), # 1st design
+						 		  c(5, 10, 15, 20, 25, 50, 75, 100), # 2nd design
+								  c(5, 15, 25, 35, 45, 55, 85, 125)) # 3rd design
+```
+
+To get the first element of this list we can use either
+```{r}
+N_designs[[1]] # proper list indexing
+```
+or this
+```{r}
+N_designs[1] # vector indexing
+```
+The difference is subtle, but notice that with vector indexing we get a `[[1]]` in above the actual vector. It's like we get a picture of thing in that first slot, whereas with the proper list indexing we get the vector itself. Now let's convert both items into characters and the difference should be clearer.
+```{r}
+as.character(N_designs[[1]])
+as.character(N_designs[1])
+```
+You see? The first we we got the vector, and then each element in that vector was converted into a character string. The second way we got the "picture" of the vector, which was converted to a string. Since we just want our function to keep track of which design goes with which delta (i.e., we want the design as a label), the latter one works better. However, our function `est_power_holling()` requires a vector, so we need to use the proper list indexing; if you do not, you will get an error.
+
+Anyway, let's try it out and see how our power changes with the designs.
+
+```{r}
+pow_designs <- est_power_holl_designs(N_designs) # using the defaults for a, b, & nsim
+
+with(pow_designs, tapply(delta, design, summary))
+
+qplot(delta, data=pow_designs) + facet_grid(design ~ .)
+```
+
+Right, so the first diesgn is clearly inferior to the other two, but given a reasonable range of densities, it looks like we would correctly support the True (type II) model most of the time. Could you imagine how you might see which end of the densities was most important? Or how to add in the type III model to these simulations? This kind of simulation can be very helpful and, for better or worse, very open ended. As with your data analyses, I recommend you write down your questions before you start in on this, lest you find out that you've spent weeks simulating situations of little relevance to your actual work!
+
+Homework
+----------
+
+So we have seen the basics of simulation and power analyses, broadly defined, in two semi-realistic, but kind of boring examples. Your homework is to try to simulate data for an experiment or study of your own. You might choose a study you've already done or one you're thinking of doing. Be explicit about what you want to learn from the simulation and what you need to simulate across. If you get stuck, talk to your friends and collaborators first, then ask me. While I'd like you to go all of the way through the exercise, even if you just start setting up the problem it can be helpful.
+
+

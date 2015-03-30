@@ -10,3 +10,9 @@ figure/
 *.pdf
 BaselineIENFD.csv
 cache/
+Lab3_DeterministicFunctions.html
+Lab4_StochasticDistributions.html
+Lab8_HypothesisTesting_cache
+Lab8_HypothesisTesting_files
+Lab9_SimulationAndPower_cache
+Lab9_SimulationAndPower_files
