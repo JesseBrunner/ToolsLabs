@@ -1,11 +1,11 @@
 ---
 title: "Simulation and Power analysis"
 author: "Jesse Brunner"
-date: "March 16, 2015"
-output: html_document
+date: "April 2, 2015"
+output: pdf_document
 ---
 
-```{r setup, cache=FALSE, include=FALSE}
+```{r setup, cache=FALSE, include=TRUE, echo=FALSE}
 library(knitr)
 # output <- opts_knit$get("rmarkdown.pandoc.to")
 opts_chunk$set(warning=FALSE, message=FALSE, cache=TRUE, tidy=TRUE, fig.width=5, fig.height=4)
@@ -296,7 +296,7 @@ $$
 $$
 where $a$ is the attack rate, $h$ is the handling time, and $N$ is the number (or density) of tadpoles at risk of being eaten. 
 
-We will also use the same likelihood-based methods as we used previously to fit the models to each made up data set and AICc to compare the fit of each model. Our question is how many replicate observations we need at each prey density to ensure reasonable power of differentiating the type I from the type II models, assuming that the type II model is True.
+We will also use the same likelihood-based methods as we used previously to fit the models to each made up data set and AICc to compare the fit of each model. Our questions are 1) how often would we expect to correctly conclude that the Holling type II model is substantially superior to the Holling type I, and 2) can we recover the True parameter values (i.e., correctly estimate these parameters without bias and too much noise)?
 
 **Step 1: Simulate Data.** To simulate data, we first need to define our parameters. For fun let's use our best-fit, MLE values for $a$ and $h$ that we discovered in lab 7. 
 ```{r setpars}
@@ -309,7 +309,7 @@ N <- rep(c(5,10,15,20,30,50,75,100), each=2)
 
 We can then calculate the deterministic expectation for the set of densities/treatment levels, given our values of $a$ and $h$:
 ```{r y_det}
-probs <- a / (a + a*h*N)
+probs <- a / (1 + a*h*N)
 # It's always a good idea to graph along the way to make sure you
 # know what you're doing.
 qplot(x=N, y=probs*N)
@@ -368,7 +368,8 @@ It looks like the Holling type II is a much better fit, but let us use a common 
 ```{r}
 AICc(fit1, nobs=sum(N)) - AICc(fit2, nobs=sum(N))
 ```
-With a difference in AICc values of over `r floor(AICc(fit1, nobs=sum(N)) - AICc(fit2, nobs=sum(N)))`, the weight of evidence is certainly behind the Holling type II. This is, of course, just one simulated dataset, though. Would we expect to choose correctly most of the time? What if we dropped the sample size down to one observation per level of density? Similarly, how precisely and accurately would we expect to estimate the True parameters?
+
+With a difference in AICc values of > 10, the weight of evidence is certainly behind the Holling type II. This is, of course, just one simulated dataset, though. Would we expect to choose correctly most of the time? What if we dropped the sample size down to one observation per level of density? Similarly, how precisely and accurately would we expect to estimate the True parameters?
 
 
 **Step 3: Automate Steps 1 & 2.** We want to repeat this general approach on a whole bunch of made up data sets. As before, we will create a function that takes the true parameters as well as a vector of x-values (initial densities) and then simulates a bunch of datasets, each time fitting the two models and comparing their fit. (We will then create _another_ function to feed our power-estimating function different experimental designs.) You will notice that I've simply copied in the relevant commands from above into my function; I know it works, so why change it?
@@ -377,11 +378,11 @@ With a difference in AICc values of over `r floor(AICc(fit1, nobs=sum(N)) - AICc
 est_power_holling <- function(N, a=0.5266, h=0.0167, nsim=500){
 	
 	# set up the results data frame
-	results <- data.frame(delta=numeric(nsim))
+	results <- data.frame(delta=numeric(nsim), a=numeric(nsim), h=numeric(nsim))
 	
 	# calculated the predicted predation probabilites 
 	# across the initial densities in N
-	probs <- a / (a + a*h*N)
+	probs <- a /(1+a*h*N)
 	
 	# loop through all nsim simulations
 	for(i in 1:nsim){
@@ -399,6 +400,8 @@ est_power_holling <- function(N, a=0.5266, h=0.0167, nsim=500){
 		
 		# calculate difference in AICc & put it in the right place
 		results$delta[i] <- AICc(fit1, nobs=sum(N)) - AICc(fit2, nobs=sum(N))
+		# get the parameter estimates from the type II model
+		results[i, 2:3] <- coef(fit2)
 		
 		} # end loop through nsim
 	
@@ -409,25 +412,38 @@ est_power_holling <- function(N, a=0.5266, h=0.0167, nsim=500){
 Now, let's try estimating power for the design that Vonesh & Bolker used (the one in the vector, `N`), both to check to see if my code works, but also because I'm curious.
 
 ```{r}
+N # the design of Vonesh & Bolker
 VB_design <- est_power_holling(N=N) #using defaults, which are Vonesh & Bolker's
+
+summary(VB_design)
+
+# compare a and h to True values 
+summary(VB_design$a - a) # very little positive bias
+summary(VB_design$h - h) # negligable little bias
+
+# Histogram of the esimates of paramter a, the attack rate
+qplot(a, data=VB_design, xlab="Attack rate") + geom_vline(xintercept=a, color="red")
+
+# Histogram of the esimates of paramter h, the handling time
+qplot(h, data=VB_design, xlab="Handling time") + geom_vline(xintercept=h, color="blue")
 
 # plot a histogram of differences in AICc
 qplot(delta, data=VB_design)
 ```
 
-So our code seems to have worked and so did Vonesh and Bolker's design! That is, if they wanted to determine whether a type I or type II model fit better (assuming the data were binomially distributed with a probability coming from a type II functional response), they would virtually always find strong support for the True model (all $\Delta$ AICc > 20). But was their design overkill? Could they have gotten away with just one replicate per density? Or fewer levels of density? With our basic machinery we can address these questions pretty easily. First, let's just see what the power would be if we had only a single replicate at each density.
+So our code seems to have worked. Vonesh and Bolker's design, however, might get the "right" answer only about half of the time (depending on our criterion for differentiation  models). Indeed, in some simulations the simpler model is better (delta values < 0). Would their results have been better with _three_ replicates per density? What if we had more replicates at fewer levels of density? With our basic machinery we can address these questions pretty easily. First, let's just see what the power would be if we had three replicates at each density.
 
 ```{r}
-reduced_design <- est_power_holling(N=c(5,10,15,20,30,50,75,100))
+design3 <- est_power_holling(N=rep(c(5,10,15,20,30,50,75,100),each=3))
 
 # plot a histogram of differences in AICc
 # overlaying the reduced design on the previous graph
 qplot(delta, data=VB_design) + 
-	geom_histogram(data=reduced_design, fill="red", alpha=0.5) + 
+	geom_histogram(data=design3, fill="red", alpha=0.5) + 
 	geom_vline(xintercept=10)
 ```
 
-So assuming that we get the right answer if $\Delta$ AICc $\geq$ 10 (the vertical line), we would still have pretty substantial power to differentiate Holling I and II models. 
+So assuming that we get the right answer if $\Delta$ AICc $\geq$ 10 (the vertical line), we would still have pretty substantial power to differentiate Holling I and II models if we replicated each level 3 times, althgouh there are still some cases where we cannot choose or might choose the wrong model. 
 
 We could try different values of our parameters ($a$ and $h$) to see how they influence our power, similar to what we did in the previous example, but let's instead try exploring three different experimental designs with varying density treatments. This provides a nice example of how you can use lists to make your functions more flexible. 
 
@@ -439,7 +455,7 @@ We want to create a function that can take these vectors of numbers (experimenta
 est_power_holl_designs <- function(designs, a=0.5266, h=0.0167, nsim=500){
 	
 	# create datafram to hold the designs and output (deltas)
-	output <- data.frame(design=character(), delta=numeric())
+	output <- data.frame(design=character(), delta=numeric(), a=numeric(), h=numeric())
 	
 	# loop through designs
 	for(i in 1:length(designs)){
@@ -447,10 +463,13 @@ est_power_holl_designs <- function(designs, a=0.5266, h=0.0167, nsim=500){
 		# print the current design, nsim times
 		design <- rep(as.character(designs[i]), nsim)
 		# get the deltas from the power function for the current design
-		delta <- est_power_holling(N=designs[[i]], a=a, h=h, nsim=nsim)
+		powerstuff <- est_power_holling(N=designs[[i]], a=a, h=h, nsim=nsim)
 		
 		# put these into a temporary data frame
-		temp <- data.frame(design=design, delta=delta)
+		temp <- data.frame(design=design, 
+											 delta=powerstuff$delta, 
+											 a=powerstuff$a, 
+											 h=powerstuff$h)
 		
 		# bind this temp data frame to the bottom of the output dataframe
 		output <- rbind(output, temp)

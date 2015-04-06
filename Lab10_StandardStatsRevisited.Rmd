@@ -1,0 +1,322 @@
+---
+title: "Forging connections with standard statistics"
+author: Jesse Brunner, with contributions from Elizabeth Hunter (2011) and Jacqui
+  Frair (2009)
+date: "March 2, 2015"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(fig.width=5, fig.height=4, message=FALSE, warning=FALSE, tidy=FALSE)
+```
+
+This week we focus on connecting the new things we have learned (i.e., likelihood methods) to the things we already know (at least a bit about). The goal is to forge a deeper understanding of the process of fitting ecological models to data.  In particular, we will clarify and reinforce connections between:
+
+* ANOVA and linear models
+* linear models and generalized linear models (GLMS)
+* linear vs. non-linear deterministic model 
+
+We will follow alternative pathways to get to the same place. Our goal is not to demonstrate that there are sometimes easier, 'canned' methods, but to ensure that you understand what 'canned' models are doing and recognize when that is a good thing and when it is not. Pay special attention to how the deterministic and stochastic portions are modeled in each.  You now have the power to look under the surface (or behind the interface?) and see deeper into the process and should no longer accept software output at face value!  
+
+Part I: Linear models
+---------------------
+
+Assumptions of linear models include:
+
+1. All observed values are _independent and normally distributed_ with a constant variance (homoscedasticity) 
+2. Any continuous predictor variable (=covariate) is measured without error
+3. The independent variable is a linear function of the predictor variables
+
+Remember that the assumption of normality applies to variation around the expected value --– the _residuals_ –-- not to the whole data set. We can write out our model in the form we're getting used to seeing:
+
+$$
+   y \sim \text{normal}\left( \mu = a + bx, \sigma  \right)
+$$
+
+
+Let's **create some data that meets these assumptions**, and then apply some linear models to these data. Say we're interested in whether there is a linear relationship between the mass of a maple tree and its height, and also whether there are differences between tree species. 
+```{r lm_makeupdata}
+set.seed(11) # so we all get the same results
+
+# predictor variables
+height <- round( rnorm(45, mean = 20, sd = 6) )
+spp <- as.factor(rep( c("Red", "Silver", "Sugar"), each = 15 ))
+
+# response variables
+mass <- c( rnorm(15, mean = 12 + 1*height[1:15], sd = 5), 
+					 rnorm(15, mean = 25 + 2*height[16:30], sd = 5),
+					 rnorm(15, mean = 5  + 3*height[31:45], sd = 5) ) 
+
+# put them in a data frame
+trees <- data.frame(spp, height, mass)
+```
+So the linear relationships are clear and the standard deviation is the same among all of the trees. Can't ask for a better fit to the model assumptions than that!
+
+Let’s take a look at these data: 
+```{r lm_plot, message=FALSE, fig.width=5, fig.height=4}
+library(ggplot2)
+qplot(x=height, y=mass, color=spp, fill=spp, data=trees) + 
+	geom_smooth(method = "lm", se=TRUE)
+```
+
+Now again, we are interested in estimating the linear relationship between mass and the height of a tree. Since the height is continuous, we would probably use a linear regression. (No kidding, right? We set up our data to fit this situation... but bear with me.) This can be done by writing our own likelihood function for a linear model and then calling `optim()` or `mle2()` to fit it to the data, using the formula specification in the `mle2()` function, or using the `lm()` function built into R. Again, you would never (or rarely) use all three methods to answer a simple problem like this, but it is useful to see how you would go about doing a single problem in different ways.  
+
+First, let's go through the process of writing our own likelihoood function and then using `mle2()` to find the MLE. (Again, we _could_ use `optim()`, but then we lose the ability to use some of the nice functions in the `bbmle` package.)
+
+```{r lm_rollown, message=FALSE, warning=FALSE}
+library(bbmle)
+
+# Roll our own negative log-likelihood function
+NLL.lm <- function(a1, a2, a3, b1, b2, b3, sd, mass, height, spp){
+	# calculate predicted mass
+	pred <- (a1 + b1*height)*(spp == "Red") +    
+		      (a2 + b2*height)*(spp == "Silver") +    
+		      (a3 + b3*height)*(spp == "Sugar")    
+	# calculate the negative log-likihood of the data (mass) given our predictions and sd
+	-sum( dnorm(x=mass, mean=pred, sd=sd, log=TRUE)  )	
+}
+
+lm.1 <- mle2(NLL.lm, start = list(a1=10, a2=10, a3=10, b1=1, b2=1, b3=1, sd = 10), data = trees)
+summary(lm.1)
+```
+Make sure that the output / MLEs make sense to you. The t-tests associated with each parameter test whether it is different from zero (based on normal approximations of the parameter estimates, so apply with caution). You might also want to see if the profile confidence intervals encompass the actual True values we used when we created this data set.
+
+Second, we can accomplish the same analysis using the formula interface in `mle2()`. This happens in two stages. First we speficy the basic model (`a + b*height`). Second, using the `parameters` list, we specify that both `a` and `b` should vary by species. 
+```{r lm_mle2, message=FALSE, warning=FALSE}
+# Using the formula interface
+lm.2 <- mle2(mass ~ dnorm(mean = a + b*height, sd = sd),
+						 start = list(a=10, b=1, sd=10),   
+						 parameters = list(a ~ spp, b ~ spp),    
+						 data = trees   
+						 )
+summary(lm.2)
+```
+Take a look at the output again. The log likelihoods are the same, yes? But some of the parameter estimates seem to be different! What's going on? In our first model (`lm.1`) where we hand-coded everything we had specific parameters for each species (e.g., `a2` and `b2` for Silver maples), but when you use the formula interface in `mle2()` it follows the conventions for linear regressions. In this case `a2` = `a.(Intercept)` + `a.sppSilver` = `r coef(lm.2)[1]` + `r coef(lm.2)[2]` = `r coef(lm.2)[1] + coef(lm.2)[2]`, which is, within rounding error, what we estimated for `a2` in `lm.1`. The t-tests again test whether the parameter is different from zero, but for, for instace, `b.sppSilver`, this amounts to testing whether the slope for Silver is different from that for Red maples (the intercept or baseline species).
+
+While the information is the same, it can be useful to have separate estimates of the intercept and slope for each species in some cases (e.g., if we wanted the 95% CI on the slope for silver maples, rather than that of their difference from red maples).  We can get these separate estimates by removing the intercept using the notation, `-1`.
+
+```{r lm_mle2b, message=FALSE, warning=FALSE}
+# Using the formula interface, but not intercept
+lm.2b <- mle2(mass ~ dnorm(mean = a + b*height, sd = sd),
+							start = list(a=10, b=1, sd=10),   
+							parameters = list(a ~ -1 + spp, b ~ -1+ spp),    
+							data = trees   
+							)
+summary(lm.2b)
+```
+
+Lastly, since we are testing a linear model with normally distributed errors we can also, much more simply, use the `lm()` function. The ' `*` ' means an interaction between two variables as well as their main effects, so we are saying that there are difference in the main effects of trees (i.e., intercepts) as well as an interaction between height and species (i.e., different slopes). (We could specify _just_ the interaction with a colon, such as `height:spp`.)
+```{r lm.lm}
+lm.3 <- lm(mass ~ height*spp, data = trees)
+summary(lm.3)
+
+# or, without the intercepts (took me a bit of futzing to get the right parameterization)
+lm.3b <- lm(mass ~ (-1+spp) + spp:height, data = trees)
+summary(lm.3b)
+```
+You should see that while the order has been switched around, we are getting (very close to) the same estimates as before. `lm()` fits models by minimizing the sums of squares (or actually an analytic solution that does the same thing), where as `mle2()` fits models using negative log-likhoods. In the case of normally distributed errors, one is the same as the other. Least squares _does not_ work when your errors are not normally distributed. 
+
+We will return to this in a moment. But first, let me highlight the connection between a linear regression and an ANOVA. This will be clearer in a simpler model where we have only one factor to worrry about, "height".
+```{r lm.anova1}
+lm.4 <- lm(mass ~ height)
+summary(lm.4)
+```
+You see that there is a t-test statistic associated with height (_P_ `r format.pval(summary(lm.4)$coefficients[2,4], 1,0.001)` ) that tells us whether the overall slope associated with height is significanlty different from zero. Notice, too, the F-test statistic at the bottom with the same value. This is essentially a likelihood ratio test of the full model (including height) versus the intercept only model. Is it surprising, then, that the P-value for the t-test of the height coefficient is the same as that for this LRT F-statistic? What is slightly more surprising, unless you know probability theory pretty well, is that the square of the t value is the F-statistic. (Try it!) These distributions are related. Anyway, you will only see this equality when you have a model with a single factor. 
+
+This emphasizes that a linear model and an ANOVA do the same thing. In fact it is deeper than this: an ANOVA is simply a special case of linear models where the predictor is categorical. An ANCOVA has both categorical and continuous variables. But again, both are just special cases of linear regression. R, in general, treats these as regression problems. You can get your standard ANOVA table by using the `anova()` function on the fit linear model:
+```{r lm.anova2}
+anova(lm.4) # our single factor model
+anova(lm.3) # our full model
+```
+
+Warning: `anova()` in R gives you F-tests for _Type I_ sums of squares (that is, sequential tests such that the order of the terms matters), rather than the Type III tests reported by default in SAS (where each term is tested by comparing a model with and without that single term). If you want these other types of tests, look in the `car` package for the `Anova()` function, or better yet, use a likelihood ratio test with and without the variable of interest.
+
+
+Part II: Generalized linear models
+---------------------
+
+Towards the end of the last section I mentioned that least-squares produces the same results as maximizing the likelihood provide that the errors are normally distributed. Well what if the errors are _not_ normally distributed? 
+
+Let simulate some data that exemplify this situation. For simplicity, let's assume: 
+$$
+  \mu = a + bx \\
+   y \sim \text{Gamma}\left( \text{shape} = s, \text{scale} = \mu/s  \right)
+$$
+
+and use the same basic data as before, only now with a gamma distribution.
+```{r gamma_makeupdata}
+set.seed(1)
+height <- round( rnorm(90, mean = 20, sd = 6) )
+spp <- as.factor(rep( c("Red", "Silver", "Sugar"), each = 30 ))
+
+# a single, common shape parameter
+s <- 3
+
+# Note that we have to supply shape = s and scale = mean/s
+mass <- c( rgamma(30, shape = s, scale = (10 + 1*height[ 1:30])/s), 
+					 rgamma(30, shape = s, scale = (10 + 5*height[31:60])/s),
+					 rgamma(30, shape = s, scale = (10 + 9*height[61:90])/s) )
+
+trees2 <- data.frame(spp, height, mass)
+```
+What do these made up data look like? And how would a linear model with gaussian errors look?
+```{r}
+qplot(height, mass, color=spp, fill=spp, data=trees2) + 
+	geom_smooth(method = "lm", se = TRUE)
+
+summary(lm(mass ~ height*spp, data = trees2))
+```
+
+It's a bit mess because of the noisy data, right? Notice the few really high values (masses in the hundreds). If we expect a normal error distribution then high values would not be expected by chance from a low mean... in other words, these high values are pulling the best-fit linear regression line up. Depending on where they show up along the x-axis that can make the slope really steep, shallow, or even negative! Also, the estimated variance in the data is really high because, again, we are assuming normally distributed errors. If we allowed the errors to follow a distribution where high values did occur with some larger probability then this wouldn't be as much of an issue. 
+
+We can also take a look at the normal diagnostic plots we might use with a linear regression, particularly looking at the distribution of the residuals. (Note, these are built in to the base gaphics, so we're not going to use `ggplot2`)
+```{r glm_lmfit, fig.width=6, fig.height=5}
+par(mfrow = c(2,2))
+plot(lm(mass ~ height*spp, data = trees2))
+```
+
+The upper-left residual vs fitted plot shows a "cornucopia," which, while festive is pretty strong evidence that the variance increases with predicted (fitted) values. You can get a similar picture by looking at the lower-left plot of the standardized residuals versus the predicted (fitted) values. This should be a flat line, but clearly is not.
+
+The upper right figure is the "Q-Q" plot. If the data are normally distributed, this would be a straight line. Instead, we see "heavy tails," (note that this is sort of like the letter "H" if you count the margins). The general solution for heavy tails is to transform your data (e.g., log or sqrt). Lastly, the residual vs. leverage plot is a useful plot to see how influential points (those with high leverage) vary in their residuals. Points that are really wonky often have high leverage, meaning that they can drag the best-fit line one way or another, and will be far from the best-fit line and thus have high residual values.
+
+So of this is telling us that our residuals are not constant across the spectrum of values and that we probably aren't achieving normality. An obvious next step, or at least the one we are usually taught, would be to take the log(y) to linearize the data as well as equalize the variance.
+```{r glm_trans, fig.width=6, fig.height=5}
+lm.trans <- lm( log10(mass) ~ height*spp, data = trees2)
+par(mfrow = c(2,2))
+plot(lm.trans)
+```
+
+This transformation seems to have fix the major issues with normality and the assumption of heteroscedascity isn't horrible (although the scale-location plot might suggest otherwise). So we might be happy with this and proceed with our analysis. To see what this looks like, we can just plot linear best fit lines on the _log_ scale with the `geom_smooth()`. These are the same as what we estimated with our linear model.
+```{r glm_transplot, fig.width=5, fig.height=4}
+qplot(height, mass, color=spp, fill=spp, data = trees2, log = "y") + 
+	geom_smooth(method = "lm", se = TRUE)
+```
+
+But let me remind you of what we just did. We fit linear models on a log-transformed data:
+
+In math fitting a linear model to transformed data looks like:
+$$
+   log(y) \sim \text{normal}\left( a + bx  \right)
+$$
+Exponentiating both sides we see:
+$$
+   y \sim \text{normal}\left( e^{a + bx}  \right)
+$$
+In other words, we've fit an _exponential model_ to our data! If we put these "straight" line back on an untransformed scale we would see exponentially increasing functions (although in our particular case, they wouldn't be too extreme). 
+```{r glm_transplot2, fig.width=5, fig.height=4}
+# generate predicted values for a set of heights
+new <- expand.grid(spp=levels(spp), height=seq(min(height), max(height), length = 30))
+
+# use the predict function to predict values given this new data set... 
+# remember that they are on the log scale!
+new$log_mass <- predict(lm.trans, newdata = new)
+# tranform them back to the linear scale
+new$mass <- 10^(new$log_mass)
+
+qplot(height, mass, color = spp, data = trees2) + geom_line(data = new)
+```
+
+Now perhaps that looks like a reasonable fit to the data, but it is a _very_ different model than we set out to use! (It's especially obvious for the sugar maples. The other two are so close to flat that we don't see any curvature to them.) The question is, is that OK?  Didn't we really want to fit a linear model to our data and let the errors be non-normally distributed?
+
+This is pretty easy to do using the `mle2()` framework; we simply need to change the error distribution from a normal to a gamma (and provide shape and scale parameters, instead of mean and sd). I will let you try re-writing our mle2 call on your own.
+```{r glm_mle2, message=FALSE, warning=FALSE, echo=FALSE, eval = FALSE}
+gamma.1 <- mle2(mass ~ dgamma(shape = s, scale = (a + b*height)/s),    
+								start = list(a=10, b=1, s = 1),   
+								parameters = list(a ~ spp, b ~ spp),    
+								data = trees2  
+								)
+summary(gamma.1)
+```
+
+We can also use a built in function, `glm()`, to keep our linear model but allow a non-normal, in this case gamma-distributed error. We use the `family=` to specify the error distributions and within the call to the distribution (`Gamma()`) we can specify one of several "link" functions (see below for more details). These link functions specify how the response variable (here mass) is related (or linked) to the predictor variable (here height and species), so we use the identity link.  Anyway, here is the code:
+```{r glm_1}
+glm.1 <- glm(mass ~ height*spp, family = Gamma(link = "identity"), 
+						 data = trees2, start = c(5,1,15, 10,1,1))
+summary(glm.1)
+```
+(Note that I had to provide starting values for the deterministic model in the order of the parameters that are returned: `(Intercept), height, sppSilver, sppSugar, height:sppSilver, height:sppSugar)`. Other distributions are more robust and will likely not require starting values.)
+
+There are two things worth noting about these results: 1) Since the variance is no longer being forced to be really big to fit the assumption of normality, we do a better job of identifying the actual relationships and appropriately significant difference. In the normal linear regression above we wouldn't have called anything significant! Using the appropriate model (linear) and error distribution (Gamma) we more or less recover the True relationships. 2) Because large values are not too out of the norm (and the data are noisy), it is difficult to estimate the parameters with great precision unless you have a larger sample size. 
+
+In actual fact, this example is a bit contrived. I have never run across a linear/Gamma model before, but I thought it might illustrate the important differences between (general) linear models, linear models with transformed data, and what we call "General_ized_ linear models" or GLMs. 
+
+GLMs are linear models that allow a suite of non-normal distributions. To repeat more formally what I mentioned above, GLMs can handle the exponential family of distributions, including Poisson, binomial, Gamma, and normal distributions, but not negative binomial, beta-binomial, or even lognormal distributions. 
+
+Generalized linear models can also fit many nonlinear relationships, so long as the relationship can be linearized.  If $y = f(x)$ then there must be some function $F$ such that $F(f(x))$ is a linear function of $x$.  $F$ is known as the link function.  For example, as you learned in chapter 3 (page 83), when $f(x)$ is a logistic curve:
+$$
+   y = f(x) = \frac{e^{a + bx}}{1+e^{a+bx}}
+$$
+the logit link function transforms the logistic curve into a straight line:
+$$
+   F(y) = \log\left( \frac{y}{1-y} \right) = a + bx
+$$
+
+The errors might then be distributed in any number of ways, but we often use the logit transform with a binomial distribution, which is called logistic regression. In the `glm()` formulation, we would write this as:
+```
+glm(y ~ x_variable, family = binomial(link = "logit"))
+```
+where `y` is either zero or one. 
+
+Again, in our example here we use an identity link because we wanted the predicted value of our response variable to be precisely what our linear model says it is...no transformations after generating our predictions. To reconstruct the analysis we just completed prior to the glm, in which we log-transformed our data before fitting a linear model, we would use a log link.
+
+Other common linearizing link functions include:
+
+Standard function | Link function  | Link name	
+------------------|----------------|-----
+$y = e^x$	        | $x = \log{y}$  | log
+$y = x^2$	        |	$x = \sqrt{y}$ | square root
+$y = 1/x$	        | $x = 1/y$      | inverse
+
+
+Each distribution has a standard link function, although you can mix and match links and distributions.  Typing `?family` will return information on standard link functions available in R:
+```
+binomial(link = "logit")
+gaussian(link = "identity")
+Gamma(link = "inverse")
+inverse.gaussian(link = "1/mu^2")
+poisson(link = "log")
+quasi(link = "identity", variance = "constant")
+quasibinomial(link = "logit")
+quasipoisson(link = "log")
+```
+
+After fitting a GLM, you can use familiar modeling functions like `summary()`, `coef()`, `confint()`, `anova()`, and `plot()` to examine the parameters, test hypotheses, and plot residuals.  As with `lm()`, the default parameters represent the intercept and slopes with respect to the covariates (but we can remove the intercept with the `-1` notation).  However, all the parameters are expressed on the scale of the link function (e.g., log scale for Poisson models, logit scale for binomial models, by default).  To interpret them, you need to transform them with the inverse link function (exponential for Poisson, logistic (=plogis) for binomial).     
+
+In summary, generalized linear models come with  many useful tools (e.g., for diagnosing problems) and the theory behind them  is well developed. They are also simple to call and use and are generally more robust to starting conditions, etc. All of this makes them nice, even preferable to writing our likelihood functions. But you cannot always shoehorn your problem into a linear model. Indeed, it does not take much stretching to surpass the bounds of GLMs. In this case is you now have the tools to roll your own. 
+
+### A quick, semi-contrived example
+
+Let's go back to the tree data. What if we had a linear relationship between height and mass, but our errors were lognormally distributed? 
+```{r lognormal_makeupdata, fig.width=5, fig.height=4}
+set.seed(2)
+
+height <- round( rnorm(90, mean = 20, sd = 6) )
+spp <- as.factor(rep( c("Red", "Silver", "Sugar"), each = 30 ))
+
+# Note that we have to supply mean and sd on the log-scale
+mass <- c( rlnorm(30, meanlog = log(10 + 1*height[ 1:30]), sdlog = 1), 
+					 rlnorm(30, meanlog = log(10 + 5*height[31:60]), sdlog = 1),
+					 rlnorm(30, meanlog = log(10 + 9*height[61:90]), sdlog = 1) ) 
+
+trees3 <- data.frame(spp, height, mass)
+
+qplot(x=height, y=mass, color=spp, fill=spp, data=trees3) + 
+	geom_smooth(method = "lm", se = TRUE)
+```
+
+Again, we could normalize our errors by taking the log of the masses, but then this non-linearizes the relationship between height and mass. (Yes, I might have just made up that word.) 
+
+What we _really_ want to fit is a linear model with a lognormal error distribution:
+$$
+   y \sim \text{lognormal}\left( a + bx  \right)
+$$
+Unfortunately, this is not possible with GLMs. It is, however, pretty easy to do using the `mle2()` framework; we simply need to change the error distribution in our example above from a normal to a lognormal. I will skip the version of writing our own likelihood function (option 1, above) and just use the formula interface:
+```{r lognormal_mle2, message=FALSE, warning=FALSE}
+lin.logN <- mle2(mass ~ dlnorm(meanlog = log(a + b*height), sdlog = sd),    
+								 start = list(a=10, b=1, sd = 1),   
+								 parameters = list(a ~ spp, b ~ spp),    
+								 data = trees3)
+summary(lin.logN)
+```
+
+OK. I will leave it there. I hope that you are starting to see the connections between what you've done or been exposed to in previous classes to the approaches we've been using in this class. When the canned functions (e.g., `lm()` and `glm()`) _are appropriate_ for your problem, there is little reason _not_ to use them and some very good reasons that you should (e.g., speed, accuracy, fewer chances to make errors, better documentation, your advisor or reviewers will understand more easily). However, when your problem _does not fit_ the assumptions of these models (linearity and equal variance being perhaps the most important), then you have the tools now to tackle them head on without making inappropriate assumptions or transformations. (And don't forget,  you can always use the canned methods to get a reality check on the results from your own code.)
