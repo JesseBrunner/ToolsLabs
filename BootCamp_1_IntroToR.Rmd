@@ -1,12 +1,14 @@
 ---
-title: "Introduction to R"
+title: "R Boot Camp 1: Introduction to R"
 author: "Jesse Brunner"
-date: "January 12, 2015"
-output: html_document
+date: "`r format(Sys.Date())`"
+output:
+  pdf_document:
+    toc: true
 ---
 
 ### What is R?  
-We will be using R and R Studio in this class. R is increasingly catching on in the natural sciences with books, guides, and workshops at conferences all devoted to doing _something_ in R (or unfortunately, sometimes making you feel bad for not being in the know... see this useful discussion [here](https://labandfield.wordpress.com/2013/08/08/beware-the-academic-hipster-or-use-what-works-for-you/) and [here](https://labandfield.wordpress.com/2013/08/09/academic-hipsters-redux-and-why-open-science-is-like-going-to-the-dentist/)). In fact many of you have probably used R before in some context. But it still bares answering the questions, what is R?
+We will be using R and R Studio in this class. In fact many of you have probably used R before in some context. But it still bares answering the questions, what is R?
 
 R is an object-oriented scripting language that combines: 
 *   a programming language called S, developed by John Chambers at Bell Labs, that can be used for numerical simulation of deterministic and stochastic dynamic models  
@@ -19,11 +21,6 @@ R is open source, cross platform, and free (in both contexts). R is very extensi
 ### What is R Studio?
 R Studio is an integrated development environment (IDE) that provides a coherent, pretty, and useful front-end to R. It allows you to see your console, script, output, files, etc., all in one place. It also has a lot of useful bells and whistles (code completion, version control, interactivity, save/publish as HTML or PDF) and this nice integration of Markdown, which is what I'm using to "knit" together text+code+results into this pretty document. We will be learning to use Markdown and R Studio along the way. It may feel like we're doing too much all at once, but there is really little downside and a lot to be gained by doing it "right" from the start.  
 
-# Get started with R!
-First things first. If you haven't downloaded and installed R, go to http://cran.r-project.org/ and do so (just get the latest stable release for your platform of choice).
-Then download and install R Studio at http://www.rstudio.com/products/RStudio/#Desk . 
-
-To open R, just double click on the R Studio icon. It opens R inside of it. 
 
 ### First steps: R as a calculator
 NOTE: For today, we are going to enter commands on the console, the window with a `>` in it. Type your commands after the `>` and then hit enter or return. 
@@ -34,7 +31,13 @@ a <- 2+3 # save the output of the command to the variable (object), "a"
 # the arrow means "assign"
 a
 ```
-OK, so what to notice here. First, we can use basic math as in most any calculator, Excel, or stats program. Second, we can "assign" the output of a command (here `2+3`) to a variable (here, named `a`). In Bolker's book he uses the equal sign (`=`) to assign things to variables. This works too in most cases, but occasionally it will not and sometimes there are good reasons to use the arrow (`<-`) so I will ask that you follow my lead rather than his. Lastly, you will see that everything to the right of the hash mark (technically, the "[octothorpe](http://99percentinvisible.org/episode/octothorpe/)") is ignored as a comment. We will be use a lot of comments to make it clear what we are doing and why.
+Things to notice:
+
+  1.  We can use basic math as in most any calculator, Excel, or stats program.  
+  2.  We can assign the output of a command (here `2+3`) to a variable (here, named `a`).  
+      *  All R assignments have this form: `objectName <- value`  (Read it as "a gets 2+5".)
+      *  NOTE: You will see some others (e.g., Bolker's book) use an equal sign (`=`) to assign things to variables. While this works, it will cause problems down the line. So _please_ use the arrow (`<-`). Alt + - (the minus sign) is a shortcut you can use.  
+  3.  You will see that everything to the right of the hash mark (technically, the "[octothorpe](http://99percentinvisible.org/episode/octothorpe/)") is ignored as a comment. We will be use a lot of comments to make it clear what we are doing and why.  
 
 Anyway, we can do math on variables.
 ```{r}
@@ -44,16 +47,17 @@ a/b
 a^b # all the basic math is there, and them some!
 log(a) # natural log
 log10(a) # log10
+exp(a) # e^a
 exp(a)/b
 exp(a/b) # parentheses clarify order of operations
 round( sqrt( exp(a/b) ) ) # We can do lots operations all at once.
 round(         sqrt(exp(a/b    )
 										)
-							 ) # the "white space" is ignored. 
+							 ) # the "white space" is ignored. But keep it tidy!
 # And R will give you a `+` prompt instead of the normal `>` when you hit return and 
 # your parentheses or squiggly brackets don't add up.
 ```
-Technically, `exp()`, `sqrt()`, `round()` and anything else with the name and parentheses are functions. So are `+`, `*`, `/`, and `^`, though they don't look like most other functions. So what we are doing is sending the results of one function (e.g., `exp(a/b)`) to another (e.g., `sqrt()`) to another (`round()`). The "arguments" of the function, things it takes and acts on, go inside the parentheses. For simple math we don't need to worry about this, but later on it will be helpful to know, so consider this your introduction.
+Technically, `exp()`, `sqrt()`, `round()` and anything else with the name and parentheses are functions. So are `+`, `*`, `/`, and `^`, though they don't look like most other functions. So what we are doing is sending the results of one function (e.g., `exp(a/b)`) to another (e.g., `sqrt()`) to another (`round()`). The "arguments" of the function, things it takes and acts on, go inside the parentheses. For simple math we don't need to worry about this, but later on it will be helpful to know. We will spend more time on functions later, so don't sweat it.
 
 Math and function can also work on **vectors**
 ```{r}
@@ -76,9 +80,9 @@ max(d)
 ### Beginning to work with data in R
 In general we will import data into R (e.g., from a spreadsheet program), but it can be very useful to specify data or sequences in some instances. We saw that we could use the `c()` function to concatenate a string of numbers (or letters if we used quotation marks around each element). We can also generate sequences of integers using the `:` function (another one that doesn't look like a function),
 ```{r}
-1:10
-10:1
--10:10
+1:10 # == c(1,2,3,4,5,6,7,8,9,10)
+10:1 # == c(10,9,8,7,6,5,4,3,2,1)
+-5:10
 e <- 1:20
 e
 ```
@@ -129,56 +133,82 @@ f # see, it is now a smaller subset.
 f <- seq(from=-10, to=20, length=20) # return it to it's original version
 ```
 
-### Installing and using packages
-So far everything we've done has used functions in base R. As mentioned above, R has been extended in all sorts of ways with functions in various packages. You can install these packages from the CRAN repository (the normal way) or elsewhere (e.g., Github, etc.,).  Let us install a package for plotting data nicely (there are built-in functions, but we'll use `ggplot2` for the duration of this class). 
-```{r, eval=FALSE}
-install.packages("ggplot2")
-```
-If this is your first time using R/R Studio, you will probably be asked some questions about which repository (choose something close) and maybe where to save things. You can also just use the menus (`Tools\Install Packages...`) to do the same thing, but it will offer to autocomplete the names, which is nice. 
+### Data frames
+Most of the time you won't be working with lots of different vectors. In fact, most of the time this would be a very, very bad idea... You would have far too things to keep track of and keeping them all in sync would be a nightmare. Instead, we will almost always be working with data frames. These are basically the R version of a spreadsheet for nice, rectangular data. They:
+  *  keep related variables all together  
+  *  keep rows in sync so that when you filter by one variable, you filter out whole rows
+  *  you can send (aka "pass") a data frame to _most_ functions with at `data = data_frame` argument.  
+Also, when you import data it will almost always be imported from something like a spreadsheet and stored in R as a data frame. Let's see how data frames works as put these different elements together.
 
-So we have the package installed, but not loaded. To use the functions in the package, we need to load it with the `library()` function.
-```{r}
-library(ggplot2)
-```
-Notice that we had to use quotation marks in the `install.package()` function, but not in the `library()` functions. R is just like that sometimes. Anyway, nothing happened, but we can now plot things with functions in `ggplot2`. The simplest function is `qplot()`.
-```{r}
-qplot(x=e, y=f)
-```
 
 ### Putting it all together: working with data
-So now that we have the basics, let us play with some simple data to see how things all work together. First, let us enter the data. You may want to just copy and paste this.
+So now that we have the basics, let us play with some simple data to see how things all work together. First, let us enter the data. (You may want to just copy and paste this.)
 ```{r}
 # light intensity in µE per m2 per second
 Light <- c(20, 20, 20, 20, 21, 24, 44, 60, 90, 94, 101)  
 # maximum growth rate of the green alga Chlorella vulgaris
-rmax <- c(1.73, 1.65, 2.02, 1.89, 2.61, 1.36, 2.37, 2.08, 2.69, 2.32, 3.67) 
+rMax <- c(1.73, 1.65, 2.02, 1.89, 2.61, 1.36, 2.37, 2.08, 2.69, 2.32, 3.67) 
+
+# put them into a data frame
+growth <- data.frame(Light, rMax)
+
+# Just to keep the vectors called Light and rMax from causing problems,
+# Let's delete them
+rm(Light, rMax)
 ```
 These data represent the maximum growth rate of a green alga under various light intensities. How would you expect these to be related?
 
-We can get some summary information on each variable.
+We can get some summary information and properties of our data frame. For such a small one this is overkill, but these are very handy with real, generally much larger data sets. 
 ```{r}
-# calculate means
-summary(Light)
-summary(rmax)
+names(growth) # names of the columns
+ncol(growth)
+nrow(growth)
+summary(growth) # summary of each variable (i.e., column)
+str(growth) # this is short for "structure"
+head(growth) # the first 6, by default, rows
+tail(growth) # the last 6, by default, rows
 ```
-Plotting the data is also recommended
+You can select just one variable in a data frame with the `$` (i.e., subset a given row)
+```{r}
+growth$Light
+growth$rMax
+mean(growth$rMax)
+```
+And you can subset data frames with indices as we did before with vectors, but now we need to pay attention to the two dimensions, rows and columns. Note, a missing index means "all".
+```{r}
+growth[1, ] # first row, all columns
+growth[ ,1] # first column, all rows
+growth[3,2] # third row, second column
+```
+One last neat feature of data frames: you can add columns to them!
+```{r}
+growth$NewVar <- with(growth, 100*rMax/Light)
+growth
+```
+
+
+Plotting the data is also recommended. We'll spend a lot more time graphing soon, so here is just a bare-bones example
 ```{r}
 # plot rmax versus light
-qplot(x=Light, y=rmax)
-# add labels
-qplot(x=Light, y=rmax, xlab = "Light intensity")
+plot(x=growth$Light, y=growth$rMax)
 ```
+Remember how I just said that most functions can take a data frame as an argument? Well `plot()` isn't one of them! This is frustrating, yes, but a) it helps illustrate how you can specify  variables in a data frame and b) we won't be using `plot` much more. 
 
-So it looks like rmax increases with light intensity. Is this relationships strong? Significant? We can fit a simple linear regression to this plot with the `geom_smooth()` function added to the plot. (Note: this way of building up a plot by layers is unique to `ggplot2` and is not used in the rest of R, so be sure to keep them separate.)
+Here is a nicer way to provide a data frame to a function that doesn't want to take it...
 ```{r}
-qplot(x=Light, y=rmax, xlab="Light intensity") + geom_smooth(method="lm")
+with(data=growth, 
+		 plot(x=Light, y=rMax))
 ```
-(You might also try to see what happens if you do not specify `method="lm"`.)
+The `with()` function basically calls the function in a new environment with the data. Or you can think about it as saying, "With these data, do this thing". Like, with this data frame, calculate a correlation coefficient between Light and rMax.
+```{r}
+with(data=growth,
+		 cor.test(x=Light, y=rMax))
+```
 
-OK, so there is a postive, apparently linear relationship. But it is significant? We will fit a linear regression to the data using the `lm()` function. We use the formula notation of `y ~ x`, which can be read as y by x. 
+But again, most of the time the function can take the data frame. Consider a linear regression between rMax and Light. The `lm()` function (for linear model) and many other modeling functions use the formula notation of `y ~ x`, which can be read as y by x. Here we want to see how rMax changes with Light.
 ```{r}
 # get the regression line
-lm1 <- lm(rmax ~ Light)
+lm1 <- lm(rMax ~ Light, data=growth)
 lm1
 ```
 Notice that we do not get a whole lot out of the regression by itself, just the coefficients. To get the rest of the statitics we need to use the `summary()` function on the regression object, `lm1`. 
@@ -193,45 +223,46 @@ anova(lm1)
 ```
 Note that `anova()` just computes the ANOVA table for a fitted model (i.e., the results of `lm()` ).
 
-You can get standard diagnostic plots for most linear models with the `plot()` function (not `qplot()`). 
+You can get standard diagnostic plots for most linear models with the `plot()` function. 
 ```{r}
 plot(lm1) # diagnostic plots
 ```
 
 You will see that observation 11 seems to have a lot of influence (Cook's distance > 1, high residual deviance). It might be worth seeing if our results hold up if we remove this observation. We can use our subsetting wizardry to make this easy.
 ```{r}
-lm2 <- lm(rmax[-11] ~ Light[-11])
+lm2 <- lm(rMax ~ Light, data=growth[-11,]) # we do not want to 11th row
 summary(lm2)
 ```
+(Note: if we were using separate vectors and not a data frame we would have had to have typed `lm(rmax[-11] ~ Light[-11])`, which is OK, but you can see that the possibilities for mistakes increase... )
+
 Yup, the slope is reduced and is no longer significant when this observation is removed. So if this were real data, you would need to think about whether it was real or in error. But let us end by 
 
-# Homework: try it on your own
+### Homework: try it on your own
 Here are some data from Bolker's book showing the functional response of predators to Reed frog tadpole density. We are interested in knowing how predation rates increase with tadpole density. In this dataset, "Initial" is the initial density and "Killed" is the number of tadpoles killed by the predator.
 ```{r}
-Initial <- c(5, 5, 10, 10, 15, 15, 20, 20, 30, 30, 50, 50, 75, 75, 100, 100)
-Killed <- c(1, 2, 5, 6, 10, 9, 7, 10, 11, 15, 5, 21, 32, 18, 25, 35)
+func <- data.frame(Initial=c(5, 5, 10, 10, 15, 15, 20, 20, 30, 30, 50, 50, 75, 75, 100, 100), 
+				Killed=c(1, 2, 5, 6, 10, 9, 7, 10, 11, 15, 5, 21, 32, 18, 25, 35))
 ```
 
 Using these data:
 
 1.  plot the number killed against the initial density.
-2.  add a smoothed regression line (the default for geom_smooth)
-3.  add a best-fit regression line
-4.  plot the predation rate (=killed/initial density) against the initial density.
-5.  determine whether the predation rate (=killed/initial density) statistically changes with density
+2.  add a column for the predation rate (=killed/initial density)
+3.  find the average predation rates across all rows (=replicate aquaria)
+4.  plot the predation rate  against the initial density.
+5.  determine whether the predation rate statistically changes (linearly) with density
 
 ```{r, echo=FALSE, eval=FALSE}
 #1
-qplot(x=Initial, y=Killed)
+with(func, plot(x=Initial, y=Killed))
 #2
-qplot(x=Initial, y=Killed) + geom_smooth()
+func$PredRate <- with(func, Killed/Initial)
 #3
-qplot(x=Initial, y=Killed) + geom_smooth(method="lm")
+summary(func$PredRate)
 #4
-
-qplot(x=Initial, y=Killed/Initial) + geom_smooth(method="lm")
+with(func, plot(x=Initial, y=PredRate) )
 #5
-lm.pred <- lm(Killed/Initial ~ Initial)
+lm.pred <- lm(PredRate ~ Initial, data=func)
 summary(lm.pred)
 ```
 

@@ -1,0 +1,34 @@
+---
+title: "Overview of skills"
+author: "Jesse Brunner"
+date: "1/8/2017"
+output: html_document
+---
+
+### What I want students to get in R Bootcamp
+
+*  Basics of working with R  http://stat545.com/block002_hello-r-workspace-wd-project.html  
+		- http://stat545.com/block006_care-feeding-data.html ??  
+		_ http://stat545.com/block004_basic-r-objects.html  
+		- https://www.rstudio.com/wp-content/uploads/2016/01/rstudio-IDE-cheatsheet.pdf  
+		- https://www.rstudio.com/wp-content/uploads/2016/10/r-cheat-sheet-3.pdf  
+		- https://www.rstudio.com/wp-content/uploads/2016/02/advancedR.pdf  
+*  Importing data http://r4ds.had.co.nz/data-import.html  
+		- factors with forcats http://stat545.com/block029_factors.html  
+		-  http://stat545.com/block016_secrets-happy-graphing.html#sidebar-with
+*  Graphing with ggplot2 http://r4ds.had.co.nz/data-visualisation.html  
+		- http://docs.ggplot2.org/current/  
+		- http://www.cookbook-r.com/Graphs/  
+		- https://www.rstudio.com/wp-content/uploads/2016/11/ggplot2-cheatsheet-2.1.pdf  
+*  wrangling data http://r4ds.had.co.nz/transform.html  
+		- subsetting  
+		 	  + filter  
+			  + select  
+		- Summarizing  http://r4ds.had.co.nz/transform.html#grouped-summaries-with-summarise 
+		- spreading & gathering (optional?) http://r4ds.had.co.nz/tidy-data.html  
+		- https://www.rstudio.com/wp-content/uploads/2015/02/data-wrangling-cheatsheet.pdf  
+*  Scripts and Documents with knitr http://r4ds.had.co.nz/r-markdown.html  
+			- https://www.rstudio.com/wp-content/uploads/2016/03/rmarkdown-cheatsheet-2.0.pdf  
+*  GIT basics  
+		- http://happygitwithr.com/install-git.html#install-git  
+		
