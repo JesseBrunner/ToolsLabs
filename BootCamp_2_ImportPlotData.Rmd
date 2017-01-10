@@ -1,286 +1,330 @@
 ---
-title: 'Know your data: EMD chapter 2'
+title: 'R Bootcamp 2: Know your data (importing and plotting)'
 author: "Jesse Brunner"
-date: "January 16, 2013"
-output: html_document
+date: '`r format(Sys.Date())`'
+output:
+  html_document:
+    toc: yes
 ---
+```{r, echo=FALSE}
+knitr::opts_chunk$set(fig.width = 4, fig.height = 3)
+```
 
 
 Our goals in this lab are to: 
 
 1. learn to import and work with data
 2. learn to inspect and summarize data
-3. learn to explore data with plots
+3. learn to explore data with plots using `ggplot2`
 
-We will use the several data sets used in Ben Bolker's book, Ecological Models and Data in R (aka, EMD) and create, more or less, the same figures he presents, _with one important exception_: We will be using the functions in the ggplot2 package. (You can, if you want, see how Ben makes these figures in base R and in ggplot2 here: http://www.math.mcmaster.ca/~bolker/classes/s756/labs/vislab.html)
+A key aspect of any data analysis is to _know your data_. We have have learned a bit about getting summaries (e.g., with `summary()`, `mean()`, `sd()`, etc.), but plotting data is, argueably, far more important. Graphing can help you:  
 
-There are many good functions for plotting data in R. Unfortunately, they all end up being a bit limited under many circumstances, they often require different syntax or formulations, and often they make what should be very simple, rather difficult. I think [ggplot2](http://docs.ggplot2.org/current/) does away with many of these issues, most of the time. It is also very good for exploratory data graphing, making it easy to make it possible to tie particular variables or groupings to most every aesthetic element (e.g., color, shape, size, transparency).  (To be honest, though, ggplot2 sometimes makes fairly simple things incredibly frustrating to accomplish with its cryptic arguments... but we'll cross those bridges as we go.) The primary advantages of using it in this class are 1) that it is really nice for exploratory plotting and 2) that the figures are pretty much publication ready with little added work. Also, it seems to have a growing following, which means better and better documentation (e.g., http://wiki.stdout.org/rcookbook/Graphs/). But I digress. On with the show!
+  *  Find outlying observations, instrumental measurements, or just plain data entry errors 
+  *  Identify important relationships between variables, see trends in distrubitons, etc.
+  *  Convince your audience that you are right!
+
+In this lab we will use several data sets from Ben Bolker's book, Ecological Models and Data in R (aka, EMD) and create, more or less, the same figures he presents. 
+
+### The Tidyverse and why we will embrace it
+There are a lot of built in functions in what is called "base R," but they do not always work in a consistent or exactly desireable way (e.g., the myriad plotting functions that all work different ways). Sometimes there are gremlins lurking that can trip up the new R user (e.g., date formats, implicit conversion on import). In the last few years a group of interrelated packages and functions have been developed by [Hadley Wickham](http://hadley.nz/) and others around a consistent philosophy of data structures, use, and more. Collectively they are called the Tidyverse and we are going to use them. Yes, even if you know other ways, please stick with me in using them. Sure, in a pinch you can use what you know, but then go back and figure out how to do it with these tools. Trust me. While they can be a bit annoying to wrap your head around at first (maybe especially `ggplot2`) there are several advantages: 
+
+  *  They are consistent internally and with each other. What you learn in one context generally applies to other contexts.
+  *  They are powerful. There are fairly few cases where I go outside of the Tidyverse for import, wrangling, and plotting because they are built to do, within the right context, (most) anything you might want.
+  *  They make reading and understanding your code a great deal easier.  This is far more important than most of you know right now, but their syntax and structure represent a clear "grammar" of coding.
+  *  Just about all development in R is being influenced (or maybe sucked into the overwhelming gravity of) the Tidyverse, so you can rest assured that these tools will form the backbone of your R work into the future.  
+
+### Installing and using packages
+So far everything we've done has used functions in base R. R has been extended in all sorts of ways with functions in various packages (numbering in the thousands now!). You can install these packages from the CRAN repository (the normal way) or elsewhere (e.g., Github for more experimental offerings).  We will install the tidyverse package, which actually installs a whole bunch of related packages. You can use the following code:
+```{r, eval=FALSE}
+install.packages('tidyverse'"')
+```
+or use the menus (`Tools\Install Packages...`) to do the same thing. (Pointing and clicking is OK in this case since intalling packages is not generally part of an analysis.)  If this is your first time using R/R Studio, you will probably be asked some questions about which repository (choose something close) and maybe where to save things. 
+
+Now we have the packages installed on our computers, but not loaded. To use the functions in the package, we need to load it with the `library()` function.
+```{r}
+library(tidyverse)
+```
+Notice that we had to use quotation marks in the `install.package()` function, but not in the `library()` functions. R is just like that sometimes. Also note the messages out. Most of the time if you load a package (e.g., you could load just the `ggplot2()` package with `library(ggplot2)`) you will not notice anything. Anyway, on with the analysis.
+
 
 Importing data
 -----------------------------
-Let’s start with the Reed frog data from Vonesh and Bolker. You can find the comma-delimited files on the class wiki or here: [ReedfrogSizepred.csv](http://toolsoftheecologicaldetective.wikispaces.com/file/view/ReedfrogSizepred.csv/537874812/ReedfrogSizepred.csv), [ReedfrogPred.csv](http://toolsoftheecologicaldetective.wikispaces.com/file/view/ReedfrogPred.csv/537874802/ReedfrogPred.csv), and [ReedfrogFuncresp.csv](http://toolsoftheecologicaldetective.wikispaces.com/file/view/ReedfrogFuncresp.csv/537874794/ReedfrogFuncresp.csv).
+Let’s start with the Reed frog data from Vonesh and Bolker. You can find the comma-delimited files on the class wiki. Here are the direct links (not sure if they'll work): [ReedfrogSizepred.csv](https://piazza.com/class_profile/get_resource/ixmll02elr11or/ixqkgsmjzfv4mj), [ReedfrogPred.csv](https://piazza.com/class_profile/get_resource/ixmll02elr11or/ixqkgngmvp3422), and [ReedfrogFuncresp.csv](https://piazza.com/class_profile/get_resource/ixmll02elr11or/ixqkgs5d9144m8).
 
-Download these files to your "Tools" lab folder. Assuming that your working directory is this folder (go to the Session -> Set Working Directory menu if you are not), reading them in is easy:
+Download these files to your "Tools" lab folder. Assuming that your working directory is this folder (go to the Session/Set Working Directory menu if you are not sure), reading them in is easy:
 ```{r loadingdata}
-ReedfrogFuncresp <- read.csv("ReedfrogFuncresp.csv", header = T)
-ReedfrogPred <- read.csv("ReedfrogPred.csv", header = T)
-ReedfrogSizepred <- read.csv("ReedfrogSizepred.csv", header = T)
+FuncResp <- read_csv("ReedfrogFuncresp.csv") # NOTE: this is read_csv NOT read.csv
+Predation <- read_csv("ReedfrogPred.csv")
+SizePred <- read_csv("ReedfrogSizepred.csv")
 ```
 
-The `header = T` just tells R that the first line is the header row, where you keep all of the names of the variables. This is important because if there are _any_ characters in a column such as a the name of the variable or even a space after a number (a space is a character), then R treats the whole column as if it were characters and converts it into a factor.  
-(Alternatively in RStudio you can use the "Import Dataset" button in the workspace tab, but that's cheating!)  
-If you get an error, you probably mis specified the location or the file was not in the right format.
+If you get an error, you probably mis specified the location or the file was not in the right format. If it's not that, let me know.
+
+***For more information on importing with `read_xxx()`*** take a look at: http://r4ds.had.co.nz/data-import.html . It is possible to import from (and save to) lots of different file formats, specify the lines that are comments, and specify which format each column should be parsed as. Lots of good stuff, but most of the time you won't have to worry about it.
 
 Inspecting the data
 --------------------------
-Of course, getting the file into R does not mean that everything is OK with it. We should start by making sure it fits our expectations in terms of its structure (using `str()` for "structure"), the types of variables, and the range of data:
+Of course, getting the file into R does not mean that everything is OK with it. We should start by making sure it fits our expectations in terms of its structure, data types, and the range of data. The `read_csv()` function is helpful in that it provides a message telling you how the data were parsed. For instance you should see that both columns of the `FuncResp` data set were parsed as integer. Now look at how the columns of the `Predation` data frame. Does everything look OK? Try using `summary()` or `str()` to get a better look. 
 
 ```{r str1}
-str(ReedfrogPred)
+str(Predation) # you can ignore most of the stuff below the $'s... 
+summary(Predation)
 ```
-
-First, notice that our data are called a `data.frame`. This is essentially R's way of dealing with data in spreadsheet format. In general we will have one observation or individual per row and one variable per column. There are a lot of advantages to using data frames. First, we can refer to the variables by name rather than position and all of the elements in the _i_^th^ row are the variables for a given individual or observation. We'll get to this soon.
-
-Anyway, the `str()` function gives you information on each variable, like whether it is a number (`int` for integer, `num` for number), text, or a factor (and if so, the levels of the factor). Notice the first variable, X, which seems to increase from 1 to 2 to 3... This was an index left over from when I saved the file. It did not have a name, so R called it “X”. We don’t need it, so let’s get rid of it:
-```{r str2}
-ReedfrogPred <- ReedfrogPred[ , 2:6]
-str(ReedfrogPred)
-```
-Again, remember how we index matrices and data frames. Within the square brackets the first entry is for rows, the second for columns. We are simply saying that we want all of the rows (by leaving it blank) and just columns 2 through 6. Try pulling out different parts of this data frame to be sure you understand how things work. If you run into trouble, you can always re-load your data.
-
-OK. That looks better. The factors (predator vs. no predator; big vs. small) seem OK. The rest are either integer or numeric. This all seems to be as expected. Now let's look at the ranges of values, their means, etc.
-```{r summary}
-summary(ReedfrogPred)
-```
-This seems to be OK, too. The maximum number surviving (`surv`) is not greater than the maximum density (`density`) and the `propsurv` is between 0 and 1. If you knew more about the data and experiment, you might have other expectations about the ranges of data.  
-
 Lastly, take a look at the first and last few rows of data. The last ones can often get messed up in Excel, so pay attention:
 ```{r headtail}
-head(ReedfrogPred)
-tail(ReedfrogPred)
+head(Predation)
+tail(Predation)
 ```
 
-You might alway want to look at the data from a particular variable (or, as we'll see, give particular variables to functions). We saw how we could use indexing to pull out one or more variables, but we can also use names. For instance, let's say that we wanted to see all of the the numbers in the `propsurv` column. There are three ways to do this, but first let's create a test data frame to work with so we don't have so many numbers scrolling by in this example.
-```{r extractvars}
-# First, let's take a smaller subset of our data set to make things clearer 
-# for this example
-test <- ReedfrogPred[1:6, ] 
-test
-test[5] # be sure you remember which variable is in which column!
-test["propsurv"] # don't forget the quotation marks!
-test$propsurv # the dollar sign 
+So this more or less looks OK. But note that the data in columns `pred` and `size` in `Predation` are treated as characters (i.e., text strings) rather than factors. (If you use R a lot, particularly importing with `read.csv()`, this will seem weird.) This is on purpose because the authors think _you_ should tell R what each column represents and often one needs to refactor the columns anyway. Also many functions will implicity convert character vectors to factors if that makes sense, so you can often get away with leaving these along as characters. But still, it is good practice to specify how you want your data at the start, when or soon after your data are imported. So let's see how to do this with these two columns showing the levels of experimental factors (i.e., `pred` contains "no" and "pred" for levels with and without predators, and `size` includes big and small.), starting with size...
+```{r}
+Predation$size <- factor(Predation$size)
+summary(Predation)
 ```
-Each of these ways gets the data out, the latter two by name, which is more general and thus preferable. Most of the time we'll use the `$` notation because it's slightly easier and most functions prefer it. Anyway, let's move on.
+Now every element of `size` has one of two distinct levels, "big" and "small". By default the levels are ordered alphabetically, but you can specify the ordering with a `levels=` argument.
+```{r}
+Predation$size <- factor(Predation$size, levels=c("small", "big"))
+```
 
-In this data set, everything seems to be OK. Make sure you check the other data files.
+There is a lot more about factors and how to deal with them using the `forcats` package (included in the `tidyverse` package) here: http://r4ds.had.co.nz/factors.html
+
+
+So take a look at the last data frame, `SizePred`, and make sure everything meets your expectations.
 
 ```{r fixdata, eval=TRUE, echo=FALSE}
-ReedfrogSizepred <- ReedfrogSizepred[1:15,]
-ReedfrogSizepred$TBL <- as.numeric(as.character(ReedfrogSizepred$TBL))
-
+SizePred <- SizePred[-16,]
+SizePred$TBL <- as.integer(SizePred$TBL)
 ```
 
+Summary by group, treatment, etc. (optional)
+---------------------------------
 
-Now it would be useful to know how many observations we have at each level of size and density. The `table()` command is very useful here. It counts the number of rows (=observations) at each combination of variables you feed it:
+At this point it would be useful to know how many observations we have at each level of size and density. We might also want to calculate summary statistics (e.g., the average proportion surviving at each density, by treatment). There are lots of ways to do this. I am going to briefly show you two and then move on because wrangling and summarizing data is a focus of next week's lab. So if you are just barely holding on, you can skip this section for now.
+
+Summaries Version 1: The `table()` function is useful for providing counts of the number of rows (=observations) at each combination of variables you feed it:
+
 ```{r table}
-table(ReedfrogPred$density, ReedfrogPred$size) # see how we used the $ notation?
+# Remember we can use with() for functions that do not take a "data=" argument?
+with(Predation, table(density, size)) 
 ```
 Try switching the order of the arguments and see what happens. Try giving it three arguments and seeing what happens! 
 
-One other aspect of this data that would be useful to know is how the average mortality rate (or proportion that survived) varies with density and/or size? We can use the `tapply()` function to apply a function, such as `mean()`, to the observations that fall into the different groups we specify. (Just as `table()` counts the observations in groups we specify, `tapply()` applies a function to those observations.)
-```{r tapply}
-tapply(ReedfrogPred$propsurv, INDEX = ReedfrogPred$size, FUN = mean)
-tapply(ReedfrogPred$propsurv, INDEX = ReedfrogPred$density, FUN = mean)
-tapply(ReedfrogPred$propsurv, INDEX = list(ReedfrogPred$size, ReedfrogPred$density), FUN = mean)
+Summaries Version 2: Using the `group_by()` and `summarise()` functions in the `tidyverse` is at first pretty weird and complicated, but it is overall a much more powerful and consistent way to do things. Here we send our data frame to the `group_by()` function, with groups the data by the variables we provide and then sends the result onto the `summarise()` function, which gives us counts of observations (rows). 
+```{r}
+Predation %>% 
+	group_by(pred, size, density) %>% 
+	summarise(count=n())
 ```
-So it appears that the mean proportion surviving in these experiments varies both with density and with size. Mortality is greatest in the “big” size class at the highest density. As useful as this summary may be, I still prefer graphical arguments. Let’s try some.
-
-**Bonus**: _Did you see how I had to keep referring to the dataframe name, as in ReedfrogPred$size, over and over again? That can get old, lead to carpal tunnel, or worse, to mistakes. So here's a simpler way. Use the_ `with()` _function_.  
-```{r tapplywith, eval=FALSE}
-with(ReedfrogPred, tapply(propsurv, INDEX = list(size, density), FUN = mean))
+The cool thing here is that we could provide other summaries that we want, e.g., 
+```{r}
+Predation %>% 
+	group_by(pred, size, density) %>% 
+	summarise(count=n(), 
+	ave_surv=mean(propsurv)
+	)
 ```
-_This way R knows to look in the ReedfrogPred dataframe for the various names (e.g., propsurv, size, density) that you use in your statement._
+
+So it appears that the mean proportion surviving in these experiments varies both with density and with size. Mortality is greatest in the "big" size class at the highest density. As useful as this summary may be, I still prefer graphical arguments. Let’s try some.
 
 
-Plotting the data: scatter plots and smoothing functions
+Plotting the data: scatter plots, smoothing functions, and `ggplot2` basics
 -----------------
-Let us start with the Reed frog functional response data (Figure 2.8a in EMD) as it is relatively straightforward. We just want to plot the number killed against the number of initial frogs.   
-Again, we are going to use the ggplot2 package (rather than the `boxplot()` function in base R). Make sure it's attached.
+Let us start with the Reed frog functional response data (Figure 2.8a on p. 25 in [EMD](https://ms.mcmaster.ca/~bolker/emdbook/chap2A.pdf)) as it is relatively straightforward. We just want to plot the number killed against the number of initial frogs.  
 
-```{r functionalresponse, fig.height=4, fig.width=6}
-library(ggplot2)
-qplot(x = Initial, y = Killed, data = ReedfrogFuncresp)
+```{r functionalresponse}
+# library(ggplot2) # This is not required since ggplot2 is loaded with tidyverse
+ggplot(data = FuncResp, mapping=aes(x = Initial, y = Killed)) +
+	geom_point()
 ```
 
-Nice enough, but how do we add lines, particularly, say, a smoothed line? Well, one of the unique features of the ggplot2 way of doing things is that everything we add to a panel is a geometry of some sort or another. We can add smoother geometry as such:
+Let me try to explain how this works. First, `ggplot()` creates a coordinate system with the data you provide. You tell it which vaiables you want mapped to which aesthetics in the `aes()` call. In this case we want `Initial` mapped to the x-axis and `Killed` mapped to the y. This might seem odd or a bit overkill, but it will make sense as you begin to map more variables onto other aesthetics (e.g., color, shape or linetype, size, transparency). With the coordinate system set up you then add layers or geometries, which in this case was a point. We'll see lots more. 
 
-```{r functionalresponse_smooth, fig.height=4, fig.width=6}
-library(ggplot2)
-qplot(x = Initial, y = Killed, data = ReedfrogFuncresp) + geom_smooth()
+See http://r4ds.had.co.nz/data-visualisation.html for a nice intro to the approach of ggplot2 and http://docs.ggplot2.org/current/  for the online manual showing all of the available geometries, etc. This site, associated with the [book](http://shop.oreilly.com/product/0636920023135.do) by Winston Chang, is also very helpful: http://www.cookbook-r.com/Graphs/ (I've heard the book is great, but don't have it.)
+
+Now let's add a smoothed line to our graph to give a sense of the central tendency of the data across the initial density. This is easy with `ggplot2`. We just add another geometry.
+
+```{r functionalresponse_smooth}
+ggplot(data = FuncResp, mapping=aes(x = Initial, y = Killed)) +
+	geom_point() + 
+	geom_smooth()
 ```
 
-As you see, we have a sort of curvy blue line added, along with a grey envelope, which is the 95% CI. You can turn off the envelope by writing, " `... + geom_smooth(se = FALSE)`".  
+As you see, we have a sort of curvy blue line added, along with a grey envelope, which is the 95% CI. You can turn off the envelope by writing `... + geom_smooth(se = FALSE)`.  
 The line is by default a loess (locally [weighted] scatterplot smoothing, a form of local regression). You can change the method that the smoother uses, as in, " `... + geom_smooth(method = "lm")`".  
-The range of options include `lm`, `glm`, `gam` (general additive models; must load the `mgcv` package), `loess`, `rlm` (robust fitting of linear models; must supply function from `MASS` package), or your own functions. 
-Note that this figure doesn't look quite like what EMD shows because of slightly different functions that are used (`lowess()` vs. `loess()`, for instance).
+The range of options include `lm`, `glm`, `gam` (general additive models), `loess`, `rlm` (robust fitting of linear models; must supply function from `MASS` package), or your own functions. There are a lot of control options, so you'll want to consult the help or [ggplot2 documents site](http://docs.ggplot2.org/current/) or google to find the appropriate details. [Note that this figure doesn't look quite like what EMD shows because of slightly different functions that are used (`lowess()` vs. `loess()`, for instance).]
 
-We can also add more than one line, strung together by "`+`" signs. So for instance:
-```{r functionalresponse_smoothlm, fig.height=4, fig.width=6}
-qplot(x = Initial, y = Killed, data = ReedfrogFuncresp) + 
-	geom_smooth(method = "loess", span = 0.9, se = F, color = "red") + 
-	geom_smooth(method = "lm", se = F)
+But to illustrate, let's add a straignt up linear regrssion line in red:
+```{r functionalresponse_smoothlm}
+ggplot(data = FuncResp, mapping=aes(x = Initial, y = Killed)) +
+	geom_point() + 
+	geom_smooth(method="loess", span = 0.9) + 
+	geom_smooth(method="lm", color="red", fill="red")
 ```
 
 And we can pretty up the figure with nicer axis labels:
-```{r functionalresponse_smoothlm2, fig.height=4, fig.width=6}
-qplot(x = Initial, y = Killed, data = ReedfrogFuncresp, xlab = "Initial number of Reed frog tadpoles", ylab = "Number killed") + 
-	geom_smooth(method = "loess", span = 0.9, se = F, color = "red") + 
-	geom_smooth(method = "lm", se = F)
+```{r functionalresponse_smoothlm2}
+ggplot(data = FuncResp, mapping=aes(x = Initial, y = Killed)) +
+	geom_point() + 
+	geom_smooth(method="loess", span = 0.9) + 
+	geom_smooth(method="lm", color="red", fill="red") + 
+	labs(x="Initial number of Reed frog tadpoles", y = "Number killed")
+```
+
+It can get annoying (and lead to copy-paste errors) having to type or copy the same code over and over again, especially when you want to compare different versions of things. But you can assign `ggplot` systems or graphs to variables and add geoms, etc., to those variables.
+```{r}
+p <- ggplot(data = FuncResp, mapping=aes(x = Initial, y = Killed)) +
+	geom_point() + 
+	labs(x="Initial number of Reed frog tadpoles", y = "Number killed")
+# now add in different geoms
+p + geom_smooth(method="lm", formula=y ~ poly(x, 3))
+p + geom_line()
+```
+
+And lastly, we might want to save our pretty work using the `ggsave()` function. This function is clever about using the extension of the filename to figure out the right format.
+```{r, eval=FALSE}
+# by default saves last figure
+ggsave("test_fig_w_lines.pdf", width=4, height=3) 
+# but we can specify the plot by name, too
+ggsave("test_fig_points.png", plot=p, width=4, height=3) 
 ```
 
 
-Plotting the data: mapping sample size onto symbol area
+Plotting the data: getting around overplotting
 -----------------
-Let us switch data sets, to the experiment where predation rates were measured as a function of the tadpole's body length (TBL). Again, this is simple:
-```{r sizepred, fig.height=4, fig.width=6}
-qplot(x=TBL,y=Kill, data = ReedfrogSizepred)
+Let us switch data sets, to the experiment where predation rates were measured as a function of the tadpole's body length (TBL). We will try to create the graph that Bolker did (Fig. 2.8b on p. 25 of EMD). Again we want a scatter plot, so `geom_point()` again. 
+```{r sizepred}
+t <- ggplot(data=SizePred, aes(x=TBL,y=Kill)) 
+t + geom_point()
 ```
 
-No problem, except that if you look carefully at the data, you'll see that there are three tadpoles that were 21 mm TBL, all of which survived. They are overplotted on our figure. How do we solve this? There are at least three ways.  
+No problem, except that if you look carefully at the data (e.g., type `SizePred` to see the actual data frame) you'll see that there are three tadpoles that were 21 mm TBL, all of which survived. They are overplotted on our figure. How do we solve this? There are at least three ways.  
 
 *1) Jitter things a bit (add random noise).*  
-```{r sizepred_jitter, fig.height=4, fig.width=6}
-qplot(x=TBL,y=Kill, data = ReedfrogSizepred, position = "jitter")
+```{r sizepred_jitter}
+t + geom_point() + geom_jitter()
 ```
 
-OK. There is too much noise... we can control this if need be, but let's move on.
+If your enter this command several times you will get several different results because it ias _adding random noise_. If there is too much noise, and I think there is, we can control this a bit by specifying the height and width of the jittering.
+```{r sizepred_jitters}
+t + geom_point() + geom_jitter(width=0.5, height=0)
+```
 
 *2) Make the points semi-transparent.*  
-```{r sizepred_alpha, fig.height=4, fig.width=6}
-qplot(x=TBL,y=Kill, data = ReedfrogSizepred, alpha = I(1/3), size = I(2))
+```{r sizepred_alpha}
+t + geom_point(alpha=0.3) # hard to see... maybe make points bigger?
+t + geom_point(alpha=0.3, size=2)
 ```
 
-Well, this works better for some things than others. _Why the_ `I()`_? This means "as is." It tells ggplot2 that are not adding a new "scale" (e.g. that we want the alpha-level to change with another variable) and so not to include a legend. Try it without this wrapper function and see what happens! Try saying `alpha = X` (assuming you kept the first column in the data frame)._
+Well, this works better for some data sets (e.g., big ones with lots of overplotting) than others. 
 
 *3) Make the size (=area) of the points proportional to the number of observations.*  
-We can, in fact, do this multiple ways. While we can use some built in summary statistic functions in the ggplot2 package (see below for a partial solution), it is hard to get the geom right (i.e., I cannot make the mean values connected by lines... no idea why). This is often the case, and so while there is the fancy way, I would recommend just keeping it simple and creating a new data set.. could summarize our data by common values of "TBL"" and "Kill"" using the `table()` or `tapply()` functions, essentially creating a new data frame to plot. 
-
-First let's use `table()` to count how many observations we have at each combination of `TBL` and `Kill`. Note that we turn this into a data frame. `ggplot2` doesn't work well with matrices, which are the default output of `table()`.
-```{r sizepred_table, fig.height=4, fig.width=6}
-rfsp <- with(ReedfrogSizepred, as.data.frame(table(TBL, Kill)))
-str(rfsp)
-rfsp$Kill <- as.numeric(as.character(rfsp$Kill))
-rfsp$TBL <- as.numeric(as.character(rfsp$TBL))
-str(rfsp)
-```
-You will see that the `as.data.frame()` function has used row names to create the TBL and Kill columns, but because they were text, they are automagically converted into factors. This is the way to turn them back into numbers. (This is common; remember this)  
-Also notice that there are a whole bunch of TBL by Kill combinations with a frequency of zero We don't want to plot those, so let's subset our data frame to exclude those. 
-```{r subset}
-rfsp <- subset(rfsp, Freq != 0)
-```
-See what we did there? We used the `subset()` function, which is really useful, to select only those rows that satisfy the condition we gave it after the comma. In this case the condition is that `Freq` does not equal (`!=`) zero. We can use any number of conditions and string them together with AND (`&`) and OR (`|`). But let's keep moving...
-
-We can then plot these 10 observations using `Freq` to determine the size or area of the points.
-```{r sizepred_subset, fig.height=4, fig.width=6}
-qplot(x = TBL, y = Kill, size = Freq, data = rfsp) + 
-	scale_size_area()
+We can, in fact, do this multiple ways. We could use some data wrangling skills to make a new data set with one row per combination of `TBL` and `Kill` and add in a column with the number of observations with that combination. Often that is the better, more transparent way. But we can also use some built in summary statistic functions in the ggplot2 package.
+```{r sizepred_area}
+t + geom_point(stat="sum") + 
+	scale_size_area(breaks=1:3) # Try commenting out this scale_size_area to see what it does
 ```
 
-The `... + scale_size_area()` tells the function to make the _area_, not the diameter, proportional to the number of observations.
+This is a little different from what we've seen before. It turns out that every `geom` is intimately connected to a `stat` that controls how or what about the data are displayed. The default `stat` for `geom_point` is `identity`, i.e., just plot what is given (the x and y values). The default `stat` for `geom_smooth` is `smooth`. There are many stats and sometimes they present a nice way to modify your graph the way you want. Most of the time, however, you can just stick with the default.
 
-Now, we also wanted to plot the mean values at each level of TBL. Note that we need to add a column for the `TBL` values. Luckily, the row names from our call to `tapply()` are just those values! Also, the function is going to look for a column called "Freq", so let's make sure it finds what it's looking for. 
-```{r sizepred_tapply}
-rfsp.ave <- with(ReedfrogSizepred, data.frame(Kill = tapply(Kill, TBL, mean)) )
-rfsp.ave$TBL <- as.numeric(row.names(rfsp.ave))
+We can use another `stat` to include a line showing the average at each level of `TBL`. The summary `stat` computes a summary statistic (in this case a mean) at each unique value of x. 
+```{r sizepred_line}
+t + geom_point(stat="sum") + 
+	scale_size_area(breaks=1:3) + 
+	geom_line(stat="summary")
 ```
 
-Since this is a separate data frame, we'll need to tell `ggplot2` to use the `rfsp.ave` data frame in the `geom_line()` function. We also need to specify what the size is because size also affects line widths.
-```{r sizepred_line, fig.height=4, fig.width=6}
-qplot(x = TBL, y = Kill, size = Freq, data = rfsp) + 
-	scale_size_area() + 
-	geom_line(data = rfsp.ave, size = I(1/2) )
-
-```
-
-And there you go. Can you add nicer x and y axis labels? What about changing the title of the legend? (See `??labs` and select `ggplot2::ggtitle` for help.)
-
-
-### Here's how to use the inbuilt `stat_sum()` function ###
-
-```{r sizepred_area, eval=TRUE}
-qplot(x=TBL,y=Kill, data = ReedfrogSizepred) + 
-	stat_sum(aes(size = ..n..)) + 
-	scale_size_area()
-```
-
-There are a few new things going on here. We are using `stat_sum()` to simply sum up the number of observations in each group (x-y combination). The stuff inside the double periods forces the function to return actual numbers instead of proportions (try it without this!). And because we want the _area_ of each point to be proportional to the sample size (rather than the diameter, which would be misleading!), we need to tell R to use the the area scale. 
-
-To add in the mean values at each level of TBL, we can use this:
-```{r sizepred_area_means, eval=TRUE}
-qplot(x=TBL,y=Kill, data = ReedfrogSizepred) + 
-	stat_sum(aes(size = ..n..)) + 
-	scale_size_area() + 
-	stat_summary(fun.y = "mean", geom = "point", color = "blue", pch = 1, size = 5) 
-```
-
-but unfortunately if we use `geom = "line"` it all falls apart. 
-
-We can always use other smoothing functions to get the gist of the pattern:
-```{r sizepred_area_smooth, eval=TRUE}
-qplot(x=TBL,y=Kill, data = ReedfrogSizepred) + 
-	stat_sum(aes(size = ..n..)) + 
-	scale_size_area() + 
-	geom_smooth(method = "loess", se = F, aes(group=1))
-```
-
-OK, ok... that was perhaps not a great example of how _simple_ ggplot2 can be (though do keep this example; it might be useful later), so let's move on to other things.
+So now we have built up the full figure that Bolker presented. I hope are beginning to see the genious of building up plots layer by layer. It really is powerful! 
 
 Plotting the data: other geometries and multiple facets
 -----------------
-Since the ReedfrogPred data involve responses in distinct treatments (rather than along continuous predictor variables), we probably want to use bar plots or box plots. I think box plots show a lot more information (means as well as the range of data) and are generally preferable to bar plots. They are very flexible, too.
+Since the `Predation` data involve responses in distinct treatments (rather than along continuous predictor variables), we probably want to use bar plots or box plots. I think box plots show a lot more information (means as well as the range of data) and are generally preferable to bar plots. They are very flexible, too.
 
-Here ggplot2 comes into it's own. It is easy to make different variables a function of some variable or another. We can also make different facets for different treatments or groups. 
-
-```{r ReedfrogPredplot, fig.height=4, fig.width=6}
-qplot(factor(density), propsurv, color = size, 
-			facets = . ~ pred, data = ReedfrogPred, geom = "boxplot")
-
-qplot(factor(density), propsurv, 
-			facets = size ~ pred, data = ReedfrogPred, geom = "boxplot")
-
+Here again `ggplot2` comes into it's own. It is easy to make different aspects of the graph a function of some variable or another, including facets. But first, how to deal with `density`, which is really a factor with three experimentally imposed levels, but was imported as an integer.
+```{r Predationplot1}
+# Option 1: use the group variable (try it without this!)
+ggplot(data=Predation, aes(x=density, y=propsurv, group=density)) + geom_boxplot()
+# Option 2: turn density into a factor
+ggplot(data=Predation, aes(x=factor(density), y=propsurv)) + geom_boxplot()
 ```
 
-Try switching which factors you map to color, linetype, facets, etc. Try different geometries as well (e.g., point) with and without smoothing. Try chaning the faceting command from `facets = . ~ pred` to `facets = pred ~ .`. Try adding a nicer axis label with `+ labs()`. 
+I like option 1 better, but it really depends on what you want to show. Anyway, now let's add in facetying by the other treatments.
+```{r Predationplot2}
+ggplot(data=Predation, aes(x=density, y=propsurv, group=density)) + 
+	geom_boxplot() + 
+	facet_grid( ~ pred)
+
+ggplot(data=Predation, aes(x=density, y=propsurv, group=density)) + 
+	geom_boxplot() + 
+	facet_grid(size ~ pred)
+```
+
+See how that works? Well, the best way to figure out these functins is to try a bunch of things. Try switching which factors you map to color, linetype, facets, etc. Try different geometries as well (e.g., point) with and without smoothing. Try changing the faceting command from ` ~ pred` to `pred ~ `. Try adding a nicer axis label with `+ labs()`. 
 
 
 Plotting the data: more on ggplot2
 -----------------
 
-One of the nice things about the ggplot2 package is that everything is an object, including the basic "theme" of the plot. Try using different themes:
-`... + theme_bw() # black and white  
-... + theme_minimal()  
-... + theme_classic()'  
-You can modify these or make your own once you get the hang of things.
+There a few other key aspects of `ggplot2` that may prove useful.
 
-Similarly, each graph is actually an object, so you can assign them to variables and reference them later. In fact the `qplot()` function is really a short-hand. The normal way of plotting something is like this:
-
-```{r ggplot, fig.height=3, fig.width=4.5}
-p <- ggplot(data = ReedfrogPred, aes(x = density, y = propsurv, color = size))
-p + geom_point()
-q <- p + geom_point() + facet_grid(. ~ pred)
-q
-q + geom_smooth(method = "lm")
-p + geom_smooth(method = "lm")
+**Position adjustment** can be used to, say, stack bars or place them side-by-side. Here's an example with the `Predation` data, though it doesn't make a lot of sense in this context.
+```{r Predationplot3}
+# A histogram!
+ggplot(data=Predation, aes(x=surv)) + geom_bar() 
+# make the fill color of bars vary with the predator treatment 
+h <- ggplot(data=Predation, aes(x=surv, fill=pred))
+h + geom_bar() 
+# The default is to stack these bars, but you have options
+# Here we force the bottom of each bar to be at zero
+# Since they are overplotted I have made them semitransparent
+h + geom_bar(position="identity", alpha=0.5) 
+# Here was make the bars side-by-side
+h + geom_bar(position="dodge") 
+# Every bar sums to 1, so this is the proportion of obs 
+#    at each # surviving by treatment... yes, it makes little sense here
+h + geom_bar(position="fill") 
 ```
-So once you get the basics of your plot down (the aesthetics like the x and y positions), you can simply add geometries or what not to them.
 
+**Coordinate systems** can be used to do simple things, like flip the x & y axes
+```{r}
+# remember this graph? Say we wanted the x & y axes flipped
+t2 <- t + geom_point(stat="sum") + 
+	scale_size_area(breaks=1:3) + 
+	geom_line(stat="summary")
+t2 + coord_flip()
+```
 
-All of basic documentation of the ggplot2 package can be found here http://docs.ggplot2.org/current/, but as an introduction, http://wiki.stdout.org/rcookbook/Graphs/ is much easier to follow. There is a good deal of useful help on http://stackoverflow.com/questions/tagged/ggplot2
+Or we might want the x-axis to be on a log10 or sqrt scale
+```{r}
+t2 + coord_trans(x="log10") #compare to: t2 + scale_x_log10()
+t2 + coord_trans(x="sqrt") #compare to: t2 + scale_x_sqrt()
+```
+
+Notice that the lines showing the means curve. This is because this transformation is done _after_ everying is calculated. If we want the transformation beforehand, we would use `scale_x_XXX()`. 
+It is also possible to set the limits of the x and y axes. Again, we get different behaviors if we do this within, say, the `scale_y_continuous()` or the `coord_cartesian()` functions. Try them!
+```{r, eval=FALSE}
+t2 + scale_y_continuous(limits=c(0,3.5))
+t2 + coord_cartesian(ylim=c(0,3.5))
+```
+
+**Themes** One of the nice things about the ggplot2 package is that everything is an object, including the basic "theme" of the plot. Try using different themes:
+```{r, eval=FALSE}
+t2 + theme_bw() # black and white  
+t2 + theme_minimal()   
+t2 + theme_classic()
+```
+ 
+There is also another packaged, `ggthemes`, with a whole host of themes to match formats like Excel (yeah!), Google Docs, fivethirtyeight.com, etc. And you can modify these or make your own themes once you get the hang of things. 
+
+Help!
+--------
+All of basic documentation of the ggplot2 package can be found here http://docs.ggplot2.org/current/, but as an introduction, http://r4ds.had.co.nz/data-visualisation.html is much more helpful. And when you want to learn/remember how to do particular things, http://www.cookbook-r.com/Graphs/ is much easier to follow. There is also a good deal of useful help on http://stackoverflow.com/questions/tagged/ggplot2 
 
 
 Homework
 -----------------
-Using a data set of your own (or perhaps your advisor's, or if you cannot find one, ask me) create one publication-quality plot showing the most important feature(s) of your data. Include a 1-2 sentence caption as you would in a manuscript. Please email me the html and Rmd files. If you're struggling and need me to _run_ anything, send me the data, too.
+Using a data set of your own (or perhaps your advisor's, or if you cannot find one, ask me) create one publication-quality plot showing the most important feature(s) of your data. Include a 1-2 sentence caption as you would in a manuscript. Please post the html of your Rmd file to Piazza under the lab1 folder. 
+
+If you're struggling and need me to _run_ anything, send me the Rmd and data files.
 
 
 
