@@ -1,0 +1,89 @@
+---
+title: "Tools of the Ecological Detective"
+author: "Jesse Brunner"
+date: "1/10/2017"
+output: beamer_presentation
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+## Goals of the class
+
+- Learn to fit models to data
+     +  meaningful, mechanistic or phenomenological 
+     +  representing hypotheses of interest
+     +  _multiple_
+- Evaluate evidence for/against models under different frameworks
+     +  hypothesis testing w/ p-values
+     +  Likelihood
+     +  Bayesian (just barely)
+- Present your findings
+- Use R to conduct reproducable research
+
+
+
+## Fitting models to data
+
+Data = Signal + Noise
+```{r, echo=FALSE}
+library(ggplot2)
+df <- data.frame(x=rnorm(30, mean=10, sd=5))
+df$y <- 20 + 5*df$x + rnorm(30, mean=0, sd=15)
+ggplot(df, aes(x=x,y=y)) + 
+	geom_point() + 
+	geom_abline(intercept = 20, slope=5, color="blue") + 
+	geom_segment((aes(xend=x, yend=20 + 5*df$x)), color="red")
+```
+
+Focus on size of the Signal (relative to precision of estimate)
+
+## My role in this class
+
+You can expect me to:
+
+- Provide resources, context, and interesting challenges 
+- Be helpful, courteous, and (as much as possible) responsive to your needs 
+    + Office hours for life 
+    + Please give me 24h to get back to you on Piazza 
+- Acknowledge the limits of my undertanding (I'm still learning, too)
+
+What you cannot expct of me: 
+
+- Answers, at least not always
+    + I may not know/be certain (this is an evolving field)
+    + It may not be good for your learning 
+- Doing your work for you (code, finding right question/analysis)
+
+## Your role in this class
+
+I expect you to:
+
+- Try and understand what you are doing/reading 
+- Talk to your classmates about your understanding
+- Help each other (=key to learning!)
+- Ask me questions when you are uncertain (or just to be sure)
+- Contribute useful resources you find
+- Complete the assignments on time (=a lot of time outside of lecture/lab) 
+- Keep your damn code clean and readable!
+- Be prepared for your follow up activity / presentation on Special Topic
+
+## Rules for providing feedback 
+
+- Be curteous... we are all in this together 
+- Take the time to do it right. Are three word reviews helpful? No! 
+- Be timely
+- See what you can learn from others
+
+## Rules for student follow up / presentations
+
+You should 
+
+- have 1--3 lesson(s) you want your audience to _learn_ 
+- be interactive and engaging with activities for students to _do_
+- minimize the use of R or at least coding in front of the class  
+- be well prepared 
+     - read beyond the chapter! 
+     - sort out your questions and highlight things that tripped you up 
+     - try out your activity, etc., before hand (we are not your guinea pigs...unless it's fun)

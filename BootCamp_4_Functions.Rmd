@@ -1,0 +1,249 @@
+---
+title: 'R Bootcamp 4: Writing functions'
+author: "Jesse Brunner"
+date: '`r format(Sys.Date())`'
+output:
+  html_document:
+    toc: yes
+---
+
+```{r, echo=FALSE}
+knitr::opts_chunk$set(fig.width = 4, fig.height = 3)
+```
+
+Why and when to write functions
+-------------------------------
+
+Much of the power of R comes from the ability to use and string together functions.  But there will be many cases where it is advantageous to write our own functions (as opposed to typing out or copy-pasting previous a bit of code over and over). For instance, we can use R functions to embody mathematical functions so that there is something close to a one-to-one correspondance. Or we may write a function that, say, does some conversion of our data from one format to another. But even more broadly, there are several good reaons to use write a function:
+
+*  You can encapusulate a process or set of processes into a stand-alone thing. This means you put in the hard work of figuring out how to make something work once and then you do not have to worry about such details later, to use it. 
+*  If you do need to update your code, you only need to do it in one place! No more hunting down all of the instances of a variable's name, etc.! 
+*  You can avoid a lot of copy-paste errors where you change _most_ of the arguments, but not all of them
+*  You can make your code cleaner and easier to understand, especially if you name it well. For instance, pulling out all of the bits you want to report from a linear model is eye-crossingly confusing, but a function called `extract_stats()` is easy.
+
+In general, if you find yourself doing something multiple times, think about turning it into a function. 
+
+Writing a function from the bottom up
+------------------------------------
+
+It turns out that they are very easy to make. To illustrate how we do this, let’s make a function that computes values of the negative exponential:
+$$
+  \begin{aligned}
+  y & = a \times \exp(-bx)
+  \end{aligned}
+$$
+For reference, $a$ is the amount we start with when $x$ is zero (i.e., the y-intercept) and $b$ controls how fast $y$ declines with $x$. So let us turn this mathematical function into an R function.
+
+The basic syntax of any function is:
+```{r NegExp_1, eval=FALSE}
+FunctionName <- function() {
+	
+}
+```
+
+The stuff inside the parentheses is list of "arguments" that the function takes (or requires). The negative exponential function requires one or more $x$-values, as well as two parameters, $a$ and $b$. 
+```{r NegExp_2, eval=FALSE}
+NegExp <- function(x, a, b) {
+	
+}
+```
+
+The stuff inside the curly brackets is the heart of the function, the part that does something. In our case, it does the math:
+```{r NegExp_3}
+NegExp <- function(x, a, b) {
+	a*exp(-b*x)
+}
+```
+It is worth noting that by default the last value that is calculated in a function is "returned". In this case, it means that the value of `a*exp(-b*x)` is returned. We'll return to this in a moment. 
+
+Let's try this function and see how it works. First, let's create a sequence of $x$-values, then we will plug them into our `NegExp()` function. 
+```{r NegExp_call}
+x <- seq(from = 0, to = 10, length = 50)
+y <- NegExp(x, a = 1, b = 1)
+nexp <- data.frame(x=x, y=y)
+head(nexp)
+```
+
+Right. So we feed our function a vector of x-values and it spits out a vector of y-values, which, at first glance, seem to be about right. Let’s plot it and see.
+
+```{r NegExp_plot}
+library(ggplot2) #don't forget to load the package
+ggplot(nexp, aes(x=x,y=y)) + geom_line()
+```
+
+It works! Whoo hoo! Your first function! 
+	
+Default values and returns
+--------------------------
+
+Now, we can make two important changes. First, we can provide default, but override-able values to the arguments of a function. This is good practice because a) it lets you specify _just_ the thing(s) you want to change and b) there are built in "reasonable" or most common values. It’s good to get in the habit.
+
+```{r NegExp_4}
+NegExp <- function(x, a = 1, b = 1) {a*exp(-b*x)}
+
+nexp$y.1 <- NegExp(x) # using default values of a and b
+ggplot(nexp, aes(x=x,y=y.1)) + geom_line()
+nexp$y.2 <- NegExp(x, b=1/3) # using default value of a, but changing b
+ggplot(nexp, aes(x=x,y=y.2,1)) + geom_line()
+```
+
+The other thing to note, as I mentioned before, is that our function is returning a vector of values. We'll see later that a function can do a whole bunch of things, but it can only return one object (a vector, a matrix, a list...). By default a function returns the result of the last calculation, but with more complicated functions it is good practice to specify the thing you want returned by using `return(ThingToReturn)`. So in our case we would write:
+```{r NegExp_5}
+NegExp <- function(x, a = 1, b = 1) {
+y <- a*exp(-b*x)
+return(y)
+}
+```
+And there you go; you're first fully developed function in R!
+	
+------------------
+
+**Side Note:** One thing to note is that we have a `y` inside the function, which is returned, and a `y` outside the function, which is was we call the output from our function. These are different things. The `y` inside the function _does not exist_ outside of the function. We could call it anything and, so long as it was consistent inside the function, it would work just fine.  
+
+Similarly, we could name the resulting output of our function anything we want (within the naming rules of R) and we'll be fine. And just to be complete (if silly), we could _give_ our function a variable called `y` (e.g., `NegExp(x, a = y, b = 1)`) and it wouldn't matter. The function would know what we meant (i.e., it would simply take the value in `y` and assign it to an internal variable named `a` and then use that... it wouldn't "know" anything about what those values were called outside of itself). 
+
+This might all seem a bit confusing, but it is important to note how _useful_ this is.  It means that you don't need to know what the inside of a function looks like to use! For instance, you've used `summary()` a whole bunch of times, right? Do you have to worry that you don't give it a variable name that is uses for its own purposes internally? No! That makes our life much easier.   
+
+------------------
+
+### A few things to remember about functions:
+
+* Functions can have 0, 1, 2, or many inputs in the parentheses. These may be any type of object or data such as character strings, logical (TRUE/FALSE), vectors of numbers, matrices, data frames, lists.  
+
+* Functions can only return __1__ things, although it can be complex (e.g., an object, data frame, matrix). It is good practice to make the last statment of your function be a `return()`.  
+
+* While a function can plot or print things out, the returned object/data is the only thing that can be assigned to a variable (i.e., the only thing _you_ can work with outside of the function).  
+
+* You may create new variables within a function (e.g., `y` in the `NegExp()` function above) but that variable exists only within the function. This is a _good_ thing. Imagine if you called a function that had an interval variable called `y` that _overwrote_ the variable `y` you had in your workspace! It would be dangerous working with unknown functions! This way you do not need to pay attention to the internal workings of any given function.  
+
+ 
+
+
+### Some advice 
+
+1.  While a single function can do lots of things---reorganize your data, calculate, some statistics, plot the results, and then send you back a table of something important---it is generally better to have a function do one thing and one thing only. This gives you the flexiblity to re-use those single-function functions in new ways, or string together functions in new ways that maybe you never thought of before. Thing of functions as Legos, that you can combine in useful structures. You will start to get the hang of this, and how to make your functions more general, but for now, just keep it simple and understandable. And make a file of useful functions that you can crib or steal from later.  
+
+2.  There are a number of methods for trouble-shooting functions. The simplest is to just walk through what a function is doing, step-by-step. In fact you would do well to build up a function slowly, making sure you know how it's working along the way. The tendancy is to write a function from start to finish, try it, and then say "It doesn't work!" Then you have trouble. Instead, write a function that does the first thing  you need it do. Does that work? If so, move on to the next thing. You can use the `print()` or `paste()` functions to see what different variables look like in the function, too. 
+
+3.  Some very good advice is to start with code that does what you want in a particular setting (e.g., what you're doing with your data) and then begin to abstract it, making it more general. The next example does this.
+
+4.  Don't get hung up on making your function super duper snazzy or general. At some point you spend more time thinking of all the ways it could be used (or broken) than you save by having a function! 
+
+
+Writing a function from the specific to the general
+--------------------------------------------------
+
+Often your motivation in working with R is to get something to work in a particular case or data set. But that's actually a great time to consider turning it into a function. Here is an example from my own trials and tribulations.
+
+When writing our results sections we often want a parenthetical statement providing the stats from a model (e.g., a regression). For instance, if we had the following model:
+```{r lm_example, message=FALSE}
+library(tidyverse)
+FuncResp <- read_csv("ReedfrogFuncresp.csv")
+lm1 <- lm(Killed ~ Initial, data=FuncResp)
+summary(lm1)
+```
+we might want a statement that read, "The number killed increased linearly with the initial density ($\beta = 0.276 \pm 0.039$, _t_ = 6.991, _P_ < 0.001)." We can of course copy and paste these from the output of R, but what if our data changes? Then we would have to go through and correct all of the output. Wouldn't it be helpful if we had a function that automatically wrote this out for us?  
+
+There are a couple of things you need to know to understand the following code. First, remember that all functions can return only one thing. In the case of `summary(lm())` it's a fancy list! You can then extract things from that fancy list. So this part of the summary output has all of the output we need for our parenthetical statement.
+```{r}
+summary(lm1)$coefficients
+```
+(Note, there are some helper functions like `coef()` and `confint()`, but none that I know of extract the coefficients _and_ se, statistics, and p-value.)
+
+Second, we can string together text and R output using the `paste()` function. E.g., 
+```{r}
+paste("Pi equals ", pi, sep="") # The sep= bit specifies what separate the pieces
+```
+
+Combining these two pieces we get our full sentence this way:
+```{r}
+c <- summary(lm1)$coefficients
+
+paste("(beta = ", round(c[2,"Estimate"], 3), 
+			" ± ", round(c[2,"Std. Error"], 3), 
+			", t = ", round(c[2, "t value"], 3), 
+			", P = ", round(c[2, "Pr(>|t|)"], 3),
+			")",
+			sep="")
+```
+This bit of code _almost_ works! It's just that rounding `r c[2, "Pr(>|t|)"]` three spots returns zero. We could hard-code this in by saying "P < 0.001" or we could modify our code just a bit with an `ifelse()` statement/function.
+```{r}
+paste("(beta = ", round(c[2,"Estimate"], 3), 
+			" ± ", round(c[2,"Std. Error"], 3), 
+			", t = ", round(c[2, "t value"], 3), 
+			", P", ifelse( c[2, "Pr(>|t|)"]<0.001, 
+						 " < 0.001", 
+						 paste(" =", round(c[2, "Pr(>|t|)"], 3) )
+			   ),
+			")",
+			sep="")
+```
+
+Now that we have functioning code, we might be happy. But every time we wanted to use this we'd have to make sure we were refering to the right model and the right row (here row 2 is the stats for the variable `Initial`). This would be more helpful as a function. 
+
+To begin with, what are the variables in this bit of code? That is, what things would we want to change. I count two: the model (e.g., it could be `lm1` or anything else) and the row number or term in the model (e.g., here it is 2, but we might want stats on a different term in another model).  So our model might begin with,
+```{r}
+extract_stats <- function(model, term=2){ # notice the default for term
+	
+}
+```
+
+We can then copy and paste our previous code into the brackets and change every instance of `lm1` to `model` and every index of 2 with `term`.
+
+```{r}
+extract_stats <- function(model, term=2){ # notice the default for slot
+	c <- summary(model)$coefficients
+	paste("(beta = ", round(c[term,"Estimate"], 3), 
+				" ± ", round(c[term,"Std. Error"], 3), 
+				", t = ", round(c[term, "t value"], 3), 
+				", P", ifelse( c[term, "Pr(>|t|)"]<0.001, 
+											 " < 0.001", 
+											 paste(" =", round(c[term, "Pr(>|t|)"], 3) )
+				),
+				")",
+				sep="")
+}
+```
+
+Now let's test it out.
+```{r}
+extract_stats(lm1, term=2)
+extract_stats(lm1, term=1)
+```
+It works!!! Now we could write in our Rmd file:
+```{r, echo=FALSE}
+rinline <- function(code) {
+  sprintf('``` `r %s` ```', code)
+}
+```
+
+> `The number killed increased linearly with the initial` 
+> `density` `r rinline(extract_stats(lm1, term=2))`.
+
+and get this in the output when knitted:
+
+> The number killed increased linearly with the initial 
+> density `r extract_stats(lm1, term=2)`.
+
+Now the last thing we should do before celebrating is to write in some comments so that we or someone else can sort out what this thing does at some future date. The coments are for us and should focus on the what, not the how.
+
+```{r, eval=FALSE}
+extract_stats <- function(model, term=2){
+	# prints out the summary statsitics for a given parameter in a linear regression
+	# E.g., "beta = 3.932 ± 0.416, t = 9.464, P < 0.001"
+	# model is the name of the lm()
+	# term is the number (not name) of the term of interest, e.g., 1 == (Intercept)
+	c <- summary(model)$coefficients
+	paste("(beta = ", round(c[term,"Estimate"], 3), 
+				" ± ", round(c[term,"Std. Error"], 3), 
+				", t = ", round(c[term, "t value"], 3), 
+				", P", ifelse( c[term, "Pr(>|t|)"]<0.001, 
+											 " < 0.001", 
+											 paste(" =", round(c[term, "Pr(>|t|)"], 3) )
+				),
+				")",
+				sep="")
+}
+```
+
+P.S. You could make this more general by adding an arguement for the number of decimal places to include or allow it to work with other models (e.g., glms) that do not use t-test statistics but things like the z (try replacing the `t` in the code with `substr(colnames(c)[3],1,1)`). You could also replace the `beta` with `$\beta$` to get the actual symbol of beta and the `P` with `_P_` to make it italic. But I think this is a very good start!
