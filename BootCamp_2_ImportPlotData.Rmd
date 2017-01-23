@@ -3,6 +3,8 @@ title: 'R Bootcamp 2: Know your data (importing and plotting)'
 author: "Jesse Brunner"
 date: '`r format(Sys.Date())`'
 output:
+  pdf_document:
+    toc: yes
   html_document:
     toc: yes
 ---
@@ -17,16 +19,16 @@ Our goals in this lab are to:
 2. learn to inspect and summarize data
 3. learn to explore data with plots using `ggplot2`
 
-A key aspect of any data analysis is to _know your data_. We have have learned a bit about getting summaries (e.g., with `summary()`, `mean()`, `sd()`, etc.), but plotting data is, argueably, far more important. Graphing can help you:  
+A key aspect of any data analysis is to _know your data_. We have have learned a bit about getting summaries (e.g., with `summary()`, `mean()`, `sd()`, etc.), but plotting data is, arguably, far more important. Graphing can help you:  
 
   *  Find outlying observations, instrumental measurements, or just plain data entry errors 
-  *  Identify important relationships between variables, see trends in distrubitons, etc.
+  *  Identify important relationships between variables, see trends in distributions, etc.
   *  Convince your audience that you are right!
 
 In this lab we will use several data sets from Ben Bolker's book, Ecological Models and Data in R (aka, EMD) and create, more or less, the same figures he presents. 
 
 ### The Tidyverse and why we will embrace it
-There are a lot of built in functions in what is called "base R," but they do not always work in a consistent or exactly desireable way (e.g., the myriad plotting functions that all work different ways). Sometimes there are gremlins lurking that can trip up the new R user (e.g., date formats, implicit conversion on import). In the last few years a group of interrelated packages and functions have been developed by [Hadley Wickham](http://hadley.nz/) and others around a consistent philosophy of data structures, use, and more. Collectively they are called the Tidyverse and we are going to use them. Yes, even if you know other ways, please stick with me in using them. Sure, in a pinch you can use what you know, but then go back and figure out how to do it with these tools. Trust me. While they can be a bit annoying to wrap your head around at first (maybe especially `ggplot2`) there are several advantages: 
+There are a lot of built in functions in what is called "base R," but they do not always work in a consistent or exactly desirable way (e.g., the myriad plotting functions that all work different ways). Sometimes there are gremlins lurking that can trip up the new R user (e.g., date formats, implicit conversion on import). In the last few years a group of interrelated packages and functions have been developed by [Hadley Wickham](http://hadley.nz/) and others around a consistent philosophy of data structures, use, and more. Collectively they are called the Tidyverse and we are going to use them. Yes, even if you know other ways, please stick with me in using them. Sure, in a pinch you can use what you know, but then go back and figure out how to do it with these tools. Trust me. While they can be a bit annoying to wrap your head around at first (maybe especially `ggplot2`) there are several advantages: 
 
   *  They are consistent internally and with each other. What you learn in one context generally applies to other contexts.
   *  They are powerful. There are fairly few cases where I go outside of the Tidyverse for import, wrangling, and plotting because they are built to do, within the right context, (most) anything you might want.
@@ -38,7 +40,7 @@ So far everything we've done has used functions in base R. R has been extended i
 ```{r, eval=FALSE}
 install.packages('tidyverse'"')
 ```
-or use the menus (`Tools\Install Packages...`) to do the same thing. (Pointing and clicking is OK in this case since intalling packages is not generally part of an analysis.)  If this is your first time using R/R Studio, you will probably be asked some questions about which repository (choose something close) and maybe where to save things. 
+or use the menus (`Tools\Install Packages...`) to do the same thing. (Pointing and clicking is OK in this case since installing packages is not generally part of an analysis.)  If this is your first time using R/R Studio, you will probably be asked some questions about which repository (choose something close) and maybe where to save things. 
 
 Now we have the packages installed on our computers, but not loaded. To use the functions in the package, we need to load it with the `library()` function.
 ```{r}
@@ -76,7 +78,7 @@ head(Predation)
 tail(Predation)
 ```
 
-So this more or less looks OK. But note that the data in columns `pred` and `size` in `Predation` are treated as characters (i.e., text strings) rather than factors. (If you use R a lot, particularly importing with `read.csv()`, this will seem weird.) This is on purpose because the authors think _you_ should tell R what each column represents and often one needs to refactor the columns anyway. Also many functions will implicity convert character vectors to factors if that makes sense, so you can often get away with leaving these along as characters. But still, it is good practice to specify how you want your data at the start, when or soon after your data are imported. So let's see how to do this with these two columns showing the levels of experimental factors (i.e., `pred` contains "no" and "pred" for levels with and without predators, and `size` includes big and small.), starting with size...
+So this more or less looks OK. But note that the data in columns `pred` and `size` in `Predation` are treated as characters (i.e., text strings) rather than factors. (If you use R a lot, particularly importing with `read.csv()`, this will seem weird.) This is on purpose because the authors think _you_ should tell R what each column represents and often one needs to re-factor the columns anyway. Also many functions will implicitly convert character vectors to factors if that makes sense, so you can often get away with leaving these along as characters. But still, it is good practice to specify how you want your data at the start, when or soon after your data are imported. So let's see how to do this with these two columns showing the levels of experimental factors (i.e., `pred` contains "no" and "pred" for levels with and without predators, and `size` includes big and small.), starting with size...
 ```{r}
 Predation$size <- factor(Predation$size)
 summary(Predation)
@@ -137,7 +139,7 @@ ggplot(data = FuncResp, mapping=aes(x = Initial, y = Killed)) +
 	geom_point()
 ```
 
-Let me try to explain how this works. First, `ggplot()` creates a coordinate system with the data you provide. You tell it which vaiables you want mapped to which aesthetics in the `aes()` call. In this case we want `Initial` mapped to the x-axis and `Killed` mapped to the y. This might seem odd or a bit overkill, but it will make sense as you begin to map more variables onto other aesthetics (e.g., color, shape or linetype, size, transparency). With the coordinate system set up you then add layers or geometries, which in this case was a point. We'll see lots more. 
+Let me try to explain how this works. First, `ggplot()` creates a coordinate system with the data you provide. You tell it which variables you want mapped to which aesthetics in the `aes()` call. In this case we want `Initial` mapped to the x-axis and `Killed` mapped to the y. This might seem odd or a bit overkill, but it will make sense as you begin to map more variables onto other aesthetics (e.g., color, shape or line type, size, transparency). With the coordinate system set up you then add layers or geometries, which in this case was a point. We'll see lots more. 
 
 See http://r4ds.had.co.nz/data-visualisation.html for a nice intro to the approach of ggplot2 and http://docs.ggplot2.org/current/  for the online manual showing all of the available geometries, etc. This site, associated with the [book](http://shop.oreilly.com/product/0636920023135.do) by Winston Chang, is also very helpful: http://www.cookbook-r.com/Graphs/ (I've heard the book is great, but don't have it.)
 
@@ -153,7 +155,7 @@ As you see, we have a sort of curvy blue line added, along with a grey envelope,
 The line is by default a loess (locally [weighted] scatterplot smoothing, a form of local regression). You can change the method that the smoother uses, as in, " `... + geom_smooth(method = "lm")`".  
 The range of options include `lm`, `glm`, `gam` (general additive models), `loess`, `rlm` (robust fitting of linear models; must supply function from `MASS` package), or your own functions. There are a lot of control options, so you'll want to consult the help or [ggplot2 documents site](http://docs.ggplot2.org/current/) or google to find the appropriate details. [Note that this figure doesn't look quite like what EMD shows because of slightly different functions that are used (`lowess()` vs. `loess()`, for instance).]
 
-But to illustrate, let's add a straignt up linear regrssion line in red:
+But to illustrate, let's add a straight up linear regression line in red:
 ```{r functionalresponse_smoothlm}
 ggplot(data = FuncResp, mapping=aes(x = Initial, y = Killed)) +
 	geom_point() + 
@@ -180,7 +182,7 @@ p + geom_smooth(method="lm", formula=y ~ poly(x, 3))
 p + geom_line()
 ```
 
-And lastly, we might want to save our pretty work using the `ggsave()` function. This function is clever about using the extension of the filename to figure out the right format.
+And lastly, we might want to save our pretty work using the `ggsave()` function. This function is clever about using the extension of the file name to figure out the right format.
 ```{r, eval=FALSE}
 # by default saves last figure
 ggsave("test_fig_w_lines.pdf", width=4, height=3) 
@@ -204,7 +206,7 @@ No problem, except that if you look carefully at the data (e.g., type `SizePred`
 t + geom_point() + geom_jitter()
 ```
 
-If your enter this command several times you will get several different results because it ias _adding random noise_. If there is too much noise, and I think there is, we can control this a bit by specifying the height and width of the jittering.
+If your enter this command several times you will get several different results because it is _adding random noise_. If there is too much noise, and I think there is, we can control this a bit by specifying the height and width of the jittering.
 ```{r sizepred_jitters}
 t + geom_point() + geom_jitter(width=0.5, height=0)
 ```
@@ -233,7 +235,7 @@ t + geom_point(stat="sum") +
 	geom_line(stat="summary")
 ```
 
-So now we have built up the full figure that Bolker presented. I hope are beginning to see the genious of building up plots layer by layer. It really is powerful! 
+So now we have built up the full figure that Bolker presented. I hope are beginning to see the genius of building up plots layer by layer. It really is powerful! 
 
 Plotting the data: other geometries and multiple facets
 -----------------
@@ -247,7 +249,7 @@ ggplot(data=Predation, aes(x=density, y=propsurv, group=density)) + geom_boxplot
 ggplot(data=Predation, aes(x=factor(density), y=propsurv)) + geom_boxplot()
 ```
 
-I like option 1 better, but it really depends on what you want to show. Anyway, now let's add in facetying by the other treatments.
+I like option 1 better, but it really depends on what you want to show. Anyway, now let's add in faceting by the other treatments.
 ```{r Predationplot2}
 ggplot(data=Predation, aes(x=density, y=propsurv, group=density)) + 
 	geom_boxplot() + 
@@ -258,7 +260,7 @@ ggplot(data=Predation, aes(x=density, y=propsurv, group=density)) +
 	facet_grid(size ~ pred)
 ```
 
-See how that works? Well, the best way to figure out these functins is to try a bunch of things. Try switching which factors you map to color, linetype, facets, etc. Try different geometries as well (e.g., point) with and without smoothing. Try changing the faceting command from ` ~ pred` to `pred ~ `. Try adding a nicer axis label with `+ labs()`. 
+See how that works? Well, the best way to figure out these functions is to try a bunch of things. Try switching which factors you map to color, line type, facets, etc. Try different geometries as well (e.g., point) with and without smoothing. Try changing the faceting command from ` ~ pred` to `pred ~ `. Try adding a nicer axis label with `+ labs()`. 
 
 
 Plotting the data: more on ggplot2
@@ -299,7 +301,7 @@ t2 + coord_trans(x="log10") #compare to: t2 + scale_x_log10()
 t2 + coord_trans(x="sqrt") #compare to: t2 + scale_x_sqrt()
 ```
 
-Notice that the lines showing the means curve. This is because this transformation is done _after_ everying is calculated. If we want the transformation beforehand, we would use `scale_x_XXX()`. 
+Notice that the lines showing the means curve. This is because this transformation is done _after_ everything is calculated. If we want the transformation beforehand, we would use `scale_x_XXX()`. 
 It is also possible to set the limits of the x and y axes. Again, we get different behaviors if we do this within, say, the `scale_y_continuous()` or the `coord_cartesian()` functions. Try them!
 ```{r, eval=FALSE}
 t2 + scale_y_continuous(limits=c(0,3.5))
@@ -322,7 +324,7 @@ All of basic documentation of the ggplot2 package can be found here http://docs.
 
 Homework
 -----------------
-Using a data set of your own (or perhaps your advisor's, or if you cannot find one, ask me) create one publication-quality plot showing the most important feature(s) of your data. Include a 1-2 sentence caption as you would in a manuscript. Please post the html of your Rmd file to Piazza under the lab1 folder. 
+Using a data set of your own (or perhaps your advisor's, or if you cannot find one, ask me) create one publication-quality plot showing the most important feature(s) of your data. Include a 1-2 sentence caption as you would in a manuscript. 
 
 If you're struggling and need me to _run_ anything, send me the Rmd and data files.
 

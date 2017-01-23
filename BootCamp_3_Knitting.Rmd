@@ -23,7 +23,6 @@ p
 An average of `r round( mean(Predation$propsurv)*100, 1)`% of Reed frog tadpoles survived across all `r nrow(Predation)` aquaria. 
 
 ```{r lms}
-
 # Test whether propsurv declines with density
 lm1 <- lm(propsurv ~ density, data=Predation)
 summary(lm1)

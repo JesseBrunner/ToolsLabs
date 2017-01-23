@@ -5,6 +5,11 @@ date: '`r format(Sys.Date())`'
 output:
   html_document:
     toc: yes
+  pdf_document:
+    fig_caption: yes
+    fig_width: 6.5
+    keep_tex: yes
+    toc: yes
 ---
 
 ```{r, echo=FALSE}
@@ -14,9 +19,9 @@ knitr::opts_chunk$set(fig.width = 4, fig.height = 3)
 Why and when to write functions
 -------------------------------
 
-Much of the power of R comes from the ability to use and string together functions.  But there will be many cases where it is advantageous to write our own functions (as opposed to typing out or copy-pasting previous a bit of code over and over). For instance, we can use R functions to embody mathematical functions so that there is something close to a one-to-one correspondance. Or we may write a function that, say, does some conversion of our data from one format to another. But even more broadly, there are several good reaons to use write a function:
+Much of the power of R comes from the ability to use and string together functions.  But there will be many cases where it is advantageous to write our own functions (as opposed to typing out or copy-pasting previous a bit of code over and over). For instance, we can use R functions to embody mathematical functions so that there is something close to a one-to-one correspondence. Or we may write a function that, say, does some conversion of our data from one format to another. But even more broadly, there are several good reasons to use write a function:
 
-*  You can encapusulate a process or set of processes into a stand-alone thing. This means you put in the hard work of figuring out how to make something work once and then you do not have to worry about such details later, to use it. 
+*  You can encapsulate a process or set of processes into a stand-alone thing. This means you put in the hard work of figuring out how to make something work once and then you do not have to worry about such details later, to use it. 
 *  If you do need to update your code, you only need to do it in one place! No more hunting down all of the instances of a variable's name, etc.! 
 *  You can avoid a lot of copy-paste errors where you change _most_ of the arguments, but not all of them
 *  You can make your code cleaner and easier to understand, especially if you name it well. For instance, pulling out all of the bits you want to report from a linear model is eye-crossingly confusing, but a function called `extract_stats()` is easy.
@@ -27,11 +32,9 @@ Writing a function from the bottom up
 ------------------------------------
 
 It turns out that they are very easy to make. To illustrate how we do this, let’s make a function that computes values of the negative exponential:
-$$
-  \begin{aligned}
-  y & = a \times \exp(-bx)
-  \end{aligned}
-$$
+
+$$y= a \times \exp(-bx)$$
+
 For reference, $a$ is the amount we start with when $x$ is zero (i.e., the y-intercept) and $b$ controls how fast $y$ declines with $x$. So let us turn this mathematical function into an R function.
 
 The basic syntax of any function is:
@@ -73,59 +76,76 @@ ggplot(nexp, aes(x=x,y=y)) + geom_line()
 
 It works! Whoo hoo! Your first function! 
 	
-Default values and returns
---------------------------
+### Default values and returns
 
 Now, we can make two important changes. First, we can provide default, but override-able values to the arguments of a function. This is good practice because a) it lets you specify _just_ the thing(s) you want to change and b) there are built in "reasonable" or most common values. It’s good to get in the habit.
 
 ```{r NegExp_4}
-NegExp <- function(x, a = 1, b = 1) {a*exp(-b*x)}
+NegExp <- function(x, a = 1, b = 1) {
+	a*exp(-b*x)
+}
 
 nexp$y.1 <- NegExp(x) # using default values of a and b
 ggplot(nexp, aes(x=x,y=y.1)) + geom_line()
 nexp$y.2 <- NegExp(x, b=1/3) # using default value of a, but changing b
-ggplot(nexp, aes(x=x,y=y.2,1)) + geom_line()
+ggplot(nexp, aes(x=x,y=y.2)) + geom_line()
 ```
 
 The other thing to note, as I mentioned before, is that our function is returning a vector of values. We'll see later that a function can do a whole bunch of things, but it can only return one object (a vector, a matrix, a list...). By default a function returns the result of the last calculation, but with more complicated functions it is good practice to specify the thing you want returned by using `return(ThingToReturn)`. So in our case we would write:
 ```{r NegExp_5}
 NegExp <- function(x, a = 1, b = 1) {
-y <- a*exp(-b*x)
-return(y)
+	y <- a*exp(-b*x)
+	return(y)
 }
 ```
-And there you go; you're first fully developed function in R!
-	
+
+
+### Argument checking
+
+Lastly, while not strictly necessary, you can make your functions a little more error-proof by making sure the arguments provided make sense for the function. For instance, we might want to define our function for $x, a, b \geq 0$. This might prevent the user (i.e., us!) from using the function wrong. And in more involved functions it can prevent us from going through a lot of time-intensive calculations only to throw an error at the end. There are lots of ways to do this
+```{r NegExp_6, eval=FALSE}
+NegExp <- function(x, a = 1, b = 1) {
+	stopifnot(x>=0, a>=0, b>=0)
+	y <- a*exp(-b*x)
+	return(y)
+}
+NegExp(0:5) # works OK
+NegExp(-1:4) # does not work
+NegExp(0:5, b=-1) # does not work
+```
+There are perhaps more elegant ways to "catch" errors and report messages back, but this is simple and effective. And there you go; you're first fully developed function in R!
+
 ------------------
 
 **Side Note:** One thing to note is that we have a `y` inside the function, which is returned, and a `y` outside the function, which is was we call the output from our function. These are different things. The `y` inside the function _does not exist_ outside of the function. We could call it anything and, so long as it was consistent inside the function, it would work just fine.  
 
 Similarly, we could name the resulting output of our function anything we want (within the naming rules of R) and we'll be fine. And just to be complete (if silly), we could _give_ our function a variable called `y` (e.g., `NegExp(x, a = y, b = 1)`) and it wouldn't matter. The function would know what we meant (i.e., it would simply take the value in `y` and assign it to an internal variable named `a` and then use that... it wouldn't "know" anything about what those values were called outside of itself). 
 
-This might all seem a bit confusing, but it is important to note how _useful_ this is.  It means that you don't need to know what the inside of a function looks like to use! For instance, you've used `summary()` a whole bunch of times, right? Do you have to worry that you don't give it a variable name that is uses for its own purposes internally? No! That makes our life much easier.   
+This might all seem a bit confusing, but it is important to note how _useful_ this is.  Imagine if you called a function that had an interval variable called `y` that _overwrote_ the variable `y` you had in your work space! It would be dangerous working with unknown functions! This way you do not need to pay attention to the internal workings of any given function. For instance, you've used `summary()` a whole bunch of times, right? Do you have to worry that you don't give it a variable name that is uses for its own purposes internally? No! That makes our life much easier.   
+  
 
 ------------------
 
-### A few things to remember about functions:
+A few things to remember about functions:
+-----------------------------------------
 
 * Functions can have 0, 1, 2, or many inputs in the parentheses. These may be any type of object or data such as character strings, logical (TRUE/FALSE), vectors of numbers, matrices, data frames, lists.  
 
-* Functions can only return __1__ things, although it can be complex (e.g., an object, data frame, matrix). It is good practice to make the last statment of your function be a `return()`.  
+* Functions can only return __1__ things, although it can be complex (e.g., an object, data frame, matrix). It is good practice to make the last statement of your function be a `return()`.  
 
 * While a function can plot or print things out, the returned object/data is the only thing that can be assigned to a variable (i.e., the only thing _you_ can work with outside of the function).  
 
-* You may create new variables within a function (e.g., `y` in the `NegExp()` function above) but that variable exists only within the function. This is a _good_ thing. Imagine if you called a function that had an interval variable called `y` that _overwrote_ the variable `y` you had in your workspace! It would be dangerous working with unknown functions! This way you do not need to pay attention to the internal workings of any given function.  
-
- 
+* You may create new variables within a function (e.g., `y` in the `NegExp()` function above) but they exists only within the function. This is a _good_ thing. 
 
 
-### Some advice 
+Some advice 
+------------
 
-1.  While a single function can do lots of things---reorganize your data, calculate, some statistics, plot the results, and then send you back a table of something important---it is generally better to have a function do one thing and one thing only. This gives you the flexiblity to re-use those single-function functions in new ways, or string together functions in new ways that maybe you never thought of before. Thing of functions as Legos, that you can combine in useful structures. You will start to get the hang of this, and how to make your functions more general, but for now, just keep it simple and understandable. And make a file of useful functions that you can crib or steal from later.  
+1.  While a single function could do many things---reorganize your data, calculate, some statistics, plot the results, and then send you back a table of something important---try to make create functions do _only_ one thing (or closely related things). This gives you the flexibility to re-use those single-purpose functions in new ways or string multiple functions in new ways that maybe you never thought of before. Think of functions as Legos that you combine into useful structures. 
 
-2.  There are a number of methods for trouble-shooting functions. The simplest is to just walk through what a function is doing, step-by-step. In fact you would do well to build up a function slowly, making sure you know how it's working along the way. The tendancy is to write a function from start to finish, try it, and then say "It doesn't work!" Then you have trouble. Instead, write a function that does the first thing  you need it do. Does that work? If so, move on to the next thing. You can use the `print()` or `paste()` functions to see what different variables look like in the function, too. 
+2.  Make a file of useful functions that you can crib or steal from later. Or better yet, save each function in a separate file (e.g., `good_fxn.R`) in a folder of useful functions. Then you can easily load these functions in your scripts and analyses with the `source(file="PATH/Name.R")` function.
 
-3.  Some very good advice is to start with code that does what you want in a particular setting (e.g., what you're doing with your data) and then begin to abstract it, making it more general. The next example does this.
+3.  There are a number of methods for trouble-shooting functions. The simplest are to build up a function step-by-step, checking that it works after every addition, or start from code that works in a specific case and generalizing (see below). Either way, try to avoid the tendency to write a function from start to finish, try it, and then say "It doesn't work!"  You can also use the `print()` or `paste()` functions to see what different variables look like at various places in the function, too. More advanced debugging is beyond our scope, but just google around and you'll find lots of guides. 
 
 4.  Don't get hung up on making your function super duper snazzy or general. At some point you spend more time thinking of all the ways it could be used (or broken) than you save by having a function! 
 
@@ -166,7 +186,7 @@ paste("(beta = ", round(c[2,"Estimate"], 3),
 			")",
 			sep="")
 ```
-This bit of code _almost_ works! It's just that rounding `r c[2, "Pr(>|t|)"]` three spots returns zero. We could hard-code this in by saying "P < 0.001" or we could modify our code just a bit with an `ifelse()` statement/function.
+This bit of code _almost_ works! It's just that rounding 6.334196e-06 three spots returns zero. We could hard-code this in by saying "P < 0.001" or we could modify our code just a bit with an `ifelse()` statement/function.
 ```{r}
 paste("(beta = ", round(c[2,"Estimate"], 3), 
 			" ± ", round(c[2,"Std. Error"], 3), 
@@ -179,7 +199,7 @@ paste("(beta = ", round(c[2,"Estimate"], 3),
 			sep="")
 ```
 
-Now that we have functioning code, we might be happy. But every time we wanted to use this we'd have to make sure we were refering to the right model and the right row (here row 2 is the stats for the variable `Initial`). This would be more helpful as a function. 
+Now that we have functioning code, we might be happy. But every time we wanted to use this we'd have to make sure we were referring to the right model and the right row (here row 2 is the stats for the variable `Initial`). This would be more helpful as a function. 
 
 To begin with, what are the variables in this bit of code? That is, what things would we want to change. I count two: the model (e.g., it could be `lm1` or anything else) and the row number or term in the model (e.g., here it is 2, but we might want stats on a different term in another model).  So our model might begin with,
 ```{r}
@@ -194,7 +214,7 @@ We can then copy and paste our previous code into the brackets and change every 
 extract_stats <- function(model, term=2){ # notice the default for slot
 	c <- summary(model)$coefficients
 	paste("(beta = ", round(c[term,"Estimate"], 3), 
-				" ± ", round(c[term,"Std. Error"], 3), 
+				" XX ", round(c[term,"Std. Error"], 3), 
 				", t = ", round(c[term, "t value"], 3), 
 				", P", ifelse( c[term, "Pr(>|t|)"]<0.001, 
 											 " < 0.001", 
@@ -225,7 +245,7 @@ and get this in the output when knitted:
 > The number killed increased linearly with the initial 
 > density `r extract_stats(lm1, term=2)`.
 
-Now the last thing we should do before celebrating is to write in some comments so that we or someone else can sort out what this thing does at some future date. The coments are for us and should focus on the what, not the how.
+Now the last thing we should do before celebrating is to write in some comments so that we or someone else can sort out what this thing does at some future date. The comments are for us and should focus on the what, not the how.
 
 ```{r, eval=FALSE}
 extract_stats <- function(model, term=2){
@@ -246,4 +266,10 @@ extract_stats <- function(model, term=2){
 }
 ```
 
-P.S. You could make this more general by adding an arguement for the number of decimal places to include or allow it to work with other models (e.g., glms) that do not use t-test statistics but things like the z (try replacing the `t` in the code with `substr(colnames(c)[3],1,1)`). You could also replace the `beta` with `$\beta$` to get the actual symbol of beta and the `P` with `_P_` to make it italic. But I think this is a very good start!
+
+Next steps
+----------
+
+There is room to improve this function, making it more general. For instance, you might want to add an argument specifying the number of decimal places to include or allow it to work with other models (e.g., glms) that do not use t-test statistics but things like the z (try replacing the `t` in the code with `substr(colnames(c)[3],1,1)`). You could also replace the `beta` with `$\beta$` to get the actual symbol of beta and the `P` with `_P_` to make it italic. But I think this is a very good start!
+
+When you find that you want/need to learn more, especially about condition functions (i.e., if-else logic, switches) I recommend http://r4ds.had.co.nz/functions.html as a very approachable introduction.  When you want to get into the weeds, this advanced R book is maybe a good place to go---http://adv-r.had.co.nz/--- but honestly I haven't really need to delve that deeply. As always, remember that you are building tools _for something_ and not just for the sake of building elegant tools.

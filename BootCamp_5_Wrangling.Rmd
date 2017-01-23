@@ -1,0 +1,259 @@
+---
+title: 'R Bootcamp 5: Wrangle your data'
+author: "Jesse Brunner"
+date: '`r format(Sys.Date())`'
+output:
+  html_document:
+    toc: yes
+  pdf_document:
+    toc: yes
+---
+
+```{r, echo=FALSE}
+knitr::opts_chunk$set(fig.width = 4, fig.height = 3)
+```
+
+It is a truism that the data you have in hand or get from a collaborator are almost _never_ in the format you want or need. Maybe the format of the table is weird (e.g., a single row per animal, then lots of columns providing some measurement at many different time points) or it includes gobs of stuff you don't need or it exists in multiple files. Thus before you can get anything done, you need to wrangle your data into shape. 
+
+Data wrangling was the bane of my existence over many projects and R seemed to make it all harder. In fact for many years my advice was to get your data into shape in Excel and then import it. With the Tidyverse, however, my advice is now to leave your data file untouched (I mean, so long as it is correct and complete) and do the wrangling in a script, making all of your wrangling decisions simple, repeatable, and easily documented.
+
+```{r makeupdata, echo=FALSE}
+library(readr)
+# 20 individuals animals
+# PCR data for for each animal.
+pcr <- data.frame(ID=1:20, PCR = rbinom(20,1, 0.4))
+
+# stage of each animal at the beginning of the study
+# size at the beginning and end of the study
+animal <- data.frame(ID=1:20, Size_pre=round(rnorm(20, mean=25, sd=6)) )
+animal$Size_post <- round(animal$Size_pre + rpois(20, lambda= I(10 -5*pcr$PCR)) )
+animal$Stage <- rpois(20, lambda = 15+0.5*animal$Size_pre)
+#summary(animal)
+
+
+#summary(pcr)
+#plot(pcr$PCR_pre ~ animal$Stage)
+#plot(pcr$PCR_post ~ animal$Size)
+
+write_csv(animal, "animal.csv")
+write_csv(pcr, "pcr.csv")
+```
+
+Reshaping data: `gather()` and `spread()` 
+-----------------------------------------
+
+### Tidy data
+
+Much (all?) of the Tidyverse is built around what is called "tidy" data. According to Garrett Grolemund and Hadley Wickham in their book [_R for Data Science_ (RDS)](http://r4ds.had.co.nz/tidy-data.html#tidy-data-1):  
+
+> There are three interrelated rules which make a dataset tidy:
+> 
+> 1) Each variable must have its own column.    
+> 2) Each observation must have its own row.    
+> 3) Each value must have its own cell.    
+
+![Structure of a tidy data set, from R for Data Science_](tidy-1.png) 
+
+This format is particularly useful because it allows you to work on vectors (columns) of data, and R love vectors! Also, all of these Tidyverse tools assume this format. Note, however, that tidy data sets are not  always advantageous (e.g., with genomic or larger, multivariate data sets). But for our purposes tidy is usually best.
+
+### Our data set
+Imagine that we have data on the size of animals (salamanders?) at the beginning (`Size_pre`) and end (`Size_post`) of some study, as well as the developmental stage.  
+```{r readindata}
+library(tidyverse)
+animal <- read_csv("animal.csv")
+animal
+```
+This "wide" format might be how we would enter these data, with each row being a single animal and then the columns representing the measurements. However size shows up in two columns and the names (pre and post) contain information on a variable we might be interested in, time. For instance, what if we wanted to plot size against time or include time in a regression model? With the data set as structured we wouldn't be able to do either. 
+
+Instead, let us "gather" the two size columns into a single size column, creating a new column for time. This will then be a "long" format. 
+```{r gather}
+gather(data = animal, key="Time", value="Size", Size_pre, Size_post)
+```
+Look through the arguments and make sure you understand what key and value are. Also, try tweaking the code or adding, say, `Stage` to the list of variables at the end. 
+Now we still have a `Time` column that is character rather than numeric. This might make sense with a pre/post distinction (although we might want to rename them)...
+```{r gather2}
+animal <- gather(data = animal, key="Time", value="Size", Size_pre, Size_post,
+								 factor_key = TRUE)
+
+#Then we need to relevel this factor so that "pre" comes before "post"
+animal$Time <- factor(animal$Time, levels=c("Size_pre", "Size_post"),
+											labels=c("Pre","Post")) # relabelling them, too
+
+summary(animal)
+head(animal)
+tail(animal)
+```
+Alternatively, if these represented particular times (e.g., day 0 and day 40) we could create a new column with the right time values. (But let's not run this, OK?)
+```{r gather3, eval=FALSE}
+animal <- read_csv("animal.csv")
+animal <- gather(data = animal, key="Time", value="Size", Size_pre, Size_post)
+animal$Time2 <- 0 # give all of the entries in this new column 0 days
+# Then overwrite the entries where Time equals Size_post with 40
+animal$Time2[animal$Time == "Size_post"] <- 40
+```
+So now we could plot (or analyze) our data as a function of time
+```{r gather_plot}
+ggplot(animal, aes(x=Time, y=Size)) + 
+	geom_point() +
+	geom_line(aes(group=ID)) # The group aesthetic ensures there is one line per animal
+```
+
+This example is a bit contrived, but I hope you can see the type of situation where you would want to "gather". See http://r4ds.had.co.nz/tidy-data.html#gathering for a lot more on its use (and a slightly less contrived data set!).
+
+"Spreading" is the opposite of "gathering." Imagine we had this long data frame, `animal` and what we wanted to do was calculate the relative change in size (i.e., [`Post`-`Pre`]/`Pre`). In the long format this would be difficult, but we could convert it to the wide format and it would be easy.
+```{r spread}
+wide <- spread(animal, key=Time, value=Size) # same args, opposite effect
+wide
+# Now we could calculate our relative change in size
+with(wide, (Post-Pre)/Pre)
+```
+More on spreading cane be found at http://r4ds.had.co.nz/tidy-data.html#spreading
+
+
+Merging data frames: `left_join()` 
+-----------------------------------
+
+What if your data are split into different spreadsheets? For instance, in this (made up) experiment there is the spreadsheet for data on the animals, which we have seen, and another one with PCR data representing whether an animal tested positive (==1) or negative (==0) for some pathogen.
+```{r pcrdata}
+pcr <- read_csv("pcr.csv")
+pcr
+```
+How do we connect these? Well, both `animal` and `pcr` share a column with the animal ID. (Note: the names do not have to match, though that would be preferable, but the values in the column must.) We can get R to join these two based on these shared values. In this case, we want R to match all of the values in `pcr` to those in `animal`. That would mean that if there were IDs in `pcr` that were not in `animal`, they should not be included and conversely, if there were IDs in `animal` that were not in `pcr` R should insert an `NA` for "not available". In relational database terms, this means a left join.
+```{r left_join}
+joint <- left_join(animal, pcr)
+head(joint)
+tail(joint)
+# notice that each PCR value is represented twice, even though there is 
+# only one per animal
+joint[joint$ID == 9,] 
+```
+So now we have a single data frame with all of the data from the experiment in a nice, tidy format. I suspect that most of you won't even use joins and that if you do a left join will suffice, but there are others joins and lots more detail. See http://r4ds.had.co.nz/relational-data.html#relational-data for a nice introduction. 
+
+Filtering: `filter()`,  `select()`, and `arrange()`
+--------------------------------------------------
+
+### Filtering
+With a data frame in hand, we are ready to roll! But it will be really useful to have some tools in hand to extract or re-order the parts of the data frame we need. For instance, what if we want to plot or conduct an analysis only with the uninfected animals. We have seen enough subsetting that we could make this work (e.g., `joint[joint$PCR == 0,]`), but it gets niggly and can be hard to read. The `filter()` function is much handier. (Note: if you are an R user you've probably run across and used `subset()`, which works much the same way. Let's stick with `filter()` so that we're all on the same page...)
+```{r filter1}
+filter(joint, PCR == 0)
+```
+Or we might want just the Pre experiment information for those larger than 20 and less than or equal to 35...
+```{r filter2}
+filter(joint, Time=="Pre", Size>20, Stage<=35)
+```
+
+### Selecting
+In such a small data set this doesn't really matter, but often we will just want particular columns of the data frame, especially when joining. The `select()` function works similarly to `filter()`, but for columns. 
+```{r select}
+select(joint, Stage, Size, PCR) # you can specify the columns by name
+select(joint, 2:4) # by number
+select(joint, starts_with("S")) # or conditions, including contains(), num_range()
+```
+See http://r4ds.had.co.nz/transform.html#select-columns-with-select for more on selecting, especially by parts of names. 
+
+### Arranging/sorting
+We might also want to order the observation by several factors such as by Stage, then Size, then ID, then Time. The `arrange()` function is quite handy (much better than those in base R!).
+```{r arrange}
+arrange(joint, Stage, Size, ID, Time)
+```
+Note that `NA` values always sort to the end. It is also possible to sort in descending order (e.g., of `Stage`) using the `desc()` function within a call.
+```{r arrange2}
+arrange(joint, desc(Stage), Size, ID, Time)
+```
+
+
+
+Creating new variables: `mutate()`
+---------------------------------
+We can also add variables (e.g., calculations) to a data frame more explicitly with the `mutate()` function. This is contrived, but say we wanted to add a column of `Size/Stage`. 
+```{r mutate1}
+mutate(joint, 
+			 SizeStage = Size/Stage)
+```
+Or in a slightly less contrived example, we might want to residuals of a regression of size against stage (i.e., a metric of body condition).
+```{r mutate2}
+mutate(joint, 
+			 SizeStage = Size/Stage,
+			 Condition = residuals( lm(Size ~ Stage, data=joint) )
+			 )
+```
+Remember, we have not saved this new data frame unless we assign it to a variable (e.g., `newjoint <- mutate(joint, ...)`). For more on creating new variables with `mutate()`---I find `lag()` and `lead()` especially useful---see http://r4ds.had.co.nz/transform.html#add-new-variables-with-mutate .
+
+
+Summarizing data: `group_by()` and `summarise()`
+-----------------------------------------------
+
+Very often we need to calculate summaries of our data, particularly by some grouping variable. This is where `group_by()` and `summarise()`, combined, are wonderful. In fact you almost never use them alone. For instance, you might use `summarise()` to find the average `Stage` and `Size` across _all_ rows in the data frame.
+```{r summarise1}
+summarise(joint, 
+					AveSize=mean(Size), # == mean(joint$Size)
+					AveStage=mean(Stage)) # == mean(joint$Stage)
+```
+But what if we wanted the average size by stage? Or by stage and infection status? Here the `group_by()` function does the trick. It produced a data frame that _looks_ the same, but now has a grouping variable included in it somewhere... Then we can apply `summarise()` to it to get summaries by group.
+```{r summarise2}
+joint_Stg <- group_by(joint, Stage)
+joint_StgInf <- group_by(joint, PCR, Stage)
+
+summarise(joint_Stg, 
+					AveSize=mean(Size),
+					SdSize=sd(Size),
+					N=n()) # gives a count of the observations in each group
+
+summarise(joint_StgInf, 
+					AveSize=mean(Size),
+					SdSize=sd(Size),
+					N=n())
+```
+Cool, right? This provides a quick and easily producible (and readable) way to get summaries by groups. 
+
+### An aside on pipes: `%>%` 
+In the previous example were created two intermediate data frames, `joint_Stg` and `joint_StgInf`, which we then passed to the `summarise()` function. This can work, but by creating new objects we slow things down (I think), use more memory (yes, in most cases), and create more things to track and thus opportunities for mistakes (definitely true). Enter the pipe,  `%>%`, in the `magrittr` package (get it? Took me months...). Our previous example could be simplified like this:
+```{r summarise_pipe}
+joint %>% 
+	group_by(Stage, PCR) %>% 
+	summarise(AveSize=mean(Size),
+						SdSize=sd(Size),
+						N=n())
+```
+If you are used to working with bash or the like then you are probably familiar with piping commands. If not, it works like this: 
+
+1.  The data frame `joint` was passed to the `group_by()` function
+2.  The `group_by()` function did the grouping and passed the results on to `summarise()`
+3.  `summarise()` did it's thing and we see the output
+
+This approach is simple---there are no intermediate data frames to screw up(well, that we see... there is one temporary intermediate that is overwritten at each step)---and easy to read and update. I particularly like how we can clearly see the steps in the wrangling (that's why I put one per line). 
+
+We can use pipes with all of the tidyverse things. In fact, here is what our analysis up to now might look like if we used pipes to our advantage
+```{r pipe_example}
+# Read in the data 
+animal <- read_csv("animal.csv")
+pcr <- read_csv("pcr.csv")
+
+# reshape animal so there is a single Time column
+# and add in a new column for the residuals of size by stage
+# and add in the PCR data (This is getting out of control!)
+joint <- animal %>% 
+	gather(key="Time", value="Size", Size_pre, Size_post) %>% 
+	mutate(Condition = residuals( lm(Size ~ Stage, data=joint))) %>% 
+	left_join(pcr)
+
+# Calc average size by stage and PCR status
+joint %>% 
+	group_by(Stage, PCR) %>% 
+	summarise(AveSize=mean(Size),
+						SdSize=sd(Size),
+						N=n())
+
+# Calc average size post experiment by PCR status 
+# excluding those with |condition| > 10
+# >>This one is new<<
+joint %>% 
+	filter(Time=="Size_post", abs(Condition) <= 10) %>% 
+	group_by(PCR) %>% 
+	summarise(AveSize=mean(Size),
+			SdSize=sd(Size),
+			N=n())
+```
+You do not need to do everything in a single phrase with lots of pipes and steps. For instance, I would generally leave a join out of a series of pipes. But often they are clearer and cleaner than most other means. 
+
+
