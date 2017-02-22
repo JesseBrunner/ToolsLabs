@@ -3,9 +3,9 @@ title: 'Lab7: Fitting models to data part 2: likelihood'
 author: "Jesse Brunner"
 date: '`r format(Sys.Date())`'
 output:
-  pdf_document:
-    toc: yes
   html_document:
+    toc: yes
+  pdf_document:
     toc: yes
 ---
 
@@ -27,9 +27,9 @@ A simple example, from class
 
 In class I gave you two problems to work through by hand, with a calculator. Let's revisit these examples using R for the heavy lifting. 
 
-The first problem was this: imagine we collected 9 wood frog tadpoles from a pond, brought them back to lab, and found that 4 were infected. What is our best estimate of the probability of infection in the pond, which we will call $\pi$? In likelihood we simply flip this on its head, asking what value of $\pi$ maximizes the probability of seeing our data? The idea is that the parameter value that is most likely to give us our data is the most likeliy, given our data. 
+The first problem was this: imagine we collected 9 wood frog tadpoles from a pond, brought them back to lab, and found that 4 were infected. What is our best estimate of the probability of infection in the pond, which we will call $\pi$? In likelihood we simply flip this on its head, asking what value of $\pi$ maximizes the probability of seeing our data? The idea is that the parameter value that is most likely to give us our data is the most likely, given our data. 
 
-For our data, 4 out of 9 infected (4 successes in 9 Bernouli trials) the likelihood is provided by the binomial: 
+For our data, 4 out of 9 infected (4 successes in 9 Bernoulli trials) the likelihood is provided by the binomial: 
 
 $$ \mathcal{L}(\pi | \mbox{4 of 9}) = P(\mbox{4 of 9}| \pi) = \binom {9}{4} \pi^4 (1-\pi)^{9-4}. $$
 
@@ -56,10 +56,10 @@ library(ggplot2)
 ggplot(data=data.frame(pis, Ls), aes(x=pis, y=Ls)) + geom_point() + geom_vline(xintercept=4/9)
 ```
 
-So we can see that the Likeihood is maximized at $\pi = 4/9 = 0.444444$. 
+So we can see that the Likelihood is maximized at $\pi = 4/9 = 0.444444$. 
 
 **Model 1: A frog's a frog**
-To complicate things a bit, I added a second sample of green frog tadpoles in which 2 of 5 were infected. We are assuminf that the probability of infection, $\pi$, is the same between species (i.e., $\pi_{WF} = \pi_{GF} = \pi$). The likelihood of both samples (the first AND the second) is just the product of the binomial probability of each sample:
+To complicate things a bit, I added a second sample of green frog tadpoles in which 2 of 5 were infected. We are assuming that the probability of infection, $\pi$, is the same between species (i.e., $\pi_{WF} = \pi_{GF} = \pi$). The likelihood of both samples (the first AND the second) is just the product of the binomial probability of each sample:
 $$ 
   \begin{aligned}
   \mathcal{L} (\pi | \mbox{4 of 9} \cap \mbox{2 of 5}) 
@@ -99,7 +99,7 @@ NLLs <- -( dbinom(x=4, size=9, prob=pis, log=TRUE) + dbinom(x=2, size=5, prob=pi
 ggplot(data.frame(pis, NLLs), aes(pis, NLLs)) + geom_point() + geom_vline(xintercept=6/14)
 ```
 
-Again, we put a vertical line at $\pi_{MLE}$. It may be difficult for you to see that this is really the minimum (i.e., the MLE), but computurs are pretty good at figuring out these small differences. 
+Again, we put a vertical line at $\pi_{MLE}$. It may be difficult for you to see that this is really the minimum (i.e., the MLE), but computers are pretty good at figuring out these small differences. 
 
 Finding the maximum likelihood or minimum NLL with `optim()`
 -----------------------------------------------
@@ -124,7 +124,7 @@ OK, the function works. Now we can try to use 'optim()` to automatically find $\
 optim(fn=binom.NLL, par=c(pi=0.5), n=tested, k=infected, 
 			method="Brent", lower=0.1, upper=1) 
 ```
-Success! So we can automagically find the MLE for our simple model! Please note two things before moving on. 1) We are poviding intitial conditions with the named vector, `par=c(pi=0.5)`. This gives the fitting algorithm a reasonable place from which to start. In simple cases like this we could start most anywehere and the algorithm would be OK, but in most cases with more complex likelihood surfaces the algorithm is likely to veer off in a bad direction if we start it from somewhere stupid. 2) We are specifying a method (here, Brent, which is best for one-dimensional optimization...try it without this line and see what happens) and some bounds on the paremeter (this method requires that you provide boundaries that give finite values for the likelihood). You can actually have a lot of control over the workings of `optim()` 
+Success! So we can automagically find the MLE for our simple model! Please note two things before moving on. 1) We are providing initial conditions with the named vector, `par=c(pi=0.5)`. This gives the fitting algorithm a reasonable place from which to start. In simple cases like this we could start most anywhere and the algorithm would be OK, but in most cases with more complex likelihood surfaces the algorithm is likely to veer off in a bad direction if we start it from somewhere stupid. 2) We are specifying a method (here, Brent, which is best for one-dimensional optimization...try it without this line and see what happens) and some bounds on the parameter (this method requires that you provide boundaries that give finite values for the likelihood). You can actually have a lot of control over the workings of `optim()` 
 
 ```{r NLL_optim1}
 optim(fn=binom.NLL, par=c(pi=0.5), n=tested, k=infected, 
@@ -137,7 +137,7 @@ In the longer run, `optim()` has some rough edges and makes a few things we'd li
 library(bbmle) # you will probably have to install this package first
 mle2(binom.NLL, start=list(pi=0.5), data=list(n=tested, k=infected))
 ```
-Why do we get slightly different values with `mle2()` than from `optim()`? It comes down to different default optimization algorithms. We could, however, get the same exact answer if we said `method="Brent, lower=0.1, upper=1` in the call to `mle2()`. It is, afterall, just a nice wrapper around the call to `optim()`. So they may seem very similar, but in the longer run `mle2()` has some very nice bells and whistles, so we will stick with it.
+Why do we get slightly different values with `mle2()` than from `optim()`? It comes down to different default optimization algorithms. We could, however, get the same exact answer if we said `method="Brent, lower=0.1, upper=1` in the call to `mle2()`. It is, after all, just a nice wrapper around the call to `optim()`. So they may seem very similar, but in the longer run `mle2()` has some very nice bells and whistles, so we will stick with it.
 
 **Model 2: A wood frog is not a green frog**
 So the alternative model is that the probability of infection is different for each species, that is $\pi_{wf} \neq \pi_{gf}$. Overall, our likelihood looks like it did above, only with two different $\pi$s.
@@ -149,7 +149,7 @@ $$
   \end{aligned}
 $$
 
-How do we code this in R? Well, we just need to change our `binom.NLL()` function to accomodate the two sets of data with different parameters. We need it to take as an argument a vector telling it which group is which (here, `spp`) and then also the two parameters. Within the function, then, it just needs to use the right parameter for each species/group. 
+How do we code this in R? Well, we just need to change our `binom.NLL()` function to accommodate the two sets of data with different parameters. We need it to take as an argument a vector telling it which group is which (here, `spp`) and then also the two parameters. Within the function, then, it just needs to use the right parameter for each species/group. 
 
 ```{r NLL_fxn2}
 binom.NLL2 <- function(n, k, spp, piWF, piGF){
@@ -168,7 +168,7 @@ mle2(binom.NLL2,
 		 start=list(piWF=0.5, piGF=0.5), 
 		 data=list(n=tested, k=infected, spp=spp))
 ```
-We should see that the estimate of $\pi_{wf}$ is the same as the MLE for $\pi$ in the first dataset with only wood frogs. The estimate for $\pi_{gf}$ should confirm your intuition, too.
+We should see that the estimate of $\pi_{wf}$ is the same as the MLE for $\pi$ in the first data set with only wood frogs. The estimate for $\pi_{gf}$ should confirm your intuition, too.
 
 **An easier way**: The way I just showed you is robust and will always work. But there is a second, often easier way of doing the same thing. It is especially handy for doing things like calculating confidence intervals on parameters. So it is worth learning.
 
@@ -201,7 +201,7 @@ a <- mle2(infected ~ dbinom(size=tested, prob=pi),
 a
 ```
 
-You may be a bit confused by the output. You get a `pi.(Intercept)` and a parameter called `pi.sppWF`. This follows the linear regression notation where there is an intercept for the "base" group (here, the first level of `spp`, which is defined, by default alphabetically, as `GF`) and then an added effect of being in the other group (`spp` = `WF`). You can certainly recover the same values we observed before (with a bit of rounding error). $\pi_{gf}$ = `pi.(Intercept)` = `r coef(a)[1]` and $\pi_{wf}$ = `pi.(Intercept)` + `pi.sppWF` = `r coef(a)[1]` + `r coef(a)[2]`= `r sum(coef(a))`. However, if we wanted we could instead fit this model without an intercept, which would yeild estimates of $\pi$ for each species separately. To do so we use the `-1` to say "no intercept".
+You may be a bit confused by the output. You get a `pi.(Intercept)` and a parameter called `pi.sppWF`. This follows the linear regression notation where there is an intercept for the "base" group (here, the first level of `spp`, which is defined, by default alphabetically, as `GF`) and then an added effect of being in the other group (`spp` = `WF`). You can certainly recover the same values we observed before (with a bit of rounding error). $\pi_{gf}$ = `pi.(Intercept)` = `r coef(a)[1]` and $\pi_{wf}$ = `pi.(Intercept)` + `pi.sppWF` = `r coef(a)[1]` + `r coef(a)[2]`= `r sum(coef(a))`. However, if we wanted we could instead fit this model without an intercept, which would yield estimates of $\pi$ for each species separately. To do so we use the `-1` to say "no intercept".
 ```{r mle2_wizardry_3, warning=FALSE}
 mle2(infected ~ dbinom(size=tested, prob=pi),
 		 start=list(pi=0.5), 
@@ -229,7 +229,7 @@ One of the advantages of the flexible likelihood approach we're using is that we
 
 Estimating pollinator visitation rates is straightforward, if not easy. Just sit in a lawn chair with a beer in hand recording how many visits each of several focal flowers get per day (or hour or whatever). Take a guess: how would these visitation data be distributed? 
 
-The second part is a bit more difficult to estimate in nature (although I'm sure you could imagine running around with a Q-tip and pollen in the lab or other similar experiments). Generally what you could do is measure the number or fraction of flowers that produced seeds, assuming that any polinated flowers would produce seeds. How do you think these data would be distributed? 
+The second part is a bit more difficult to estimate in nature (although I'm sure you could imagine running around with a Q-tip and pollen in the lab or other similar experiments). Generally what you could do is measure the number or fraction of flowers that produced seeds, assuming that any pollinated flowers would produce seeds. How do you think these data would be distributed? 
 
 The key to the problem is to realize that the probability of being fertilized (and thus having a seed, ignoring the possible events after fertilization) is a function of both the total number of visits to a flower (which is a function of visitation rate times the time, $t$, the flower is open) and the probability of being pollinated given a visit. We might start by writing down:
 
@@ -254,7 +254,7 @@ and we also came back and collected 15 samples of 20 flowers each to measure the
 fert <- c(16, 13, 15, 15, 10, 13, 13, 20, 17, 19, 10, 13, 15, 12, 14)
 ```
 
-So let's be clear about the likelihood of each part. Assuming that flowers are visited randomly by pollinators, we would expect our data to be Poisson distributed with a rate paramter $\lambda$ (I sort of telegraphed that, didn't I?) and the fertilization data would be binomially distributed with a probability of success = $P(pollinated)= 1-(1-\phi)^{\lambda \times t}$. For simplicity let's assume that all flowers are open for exactly 3 days. 
+So let's be clear about the likelihood of each part. Assuming that flowers are visited randomly by pollinators, we would expect our data to be Poisson distributed with a rate parameter $\lambda$ (I sort of telegraphed that, didn't I?) and the fertilization data would be binomially distributed with a probability of success = $P(pollinated)= 1-(1-\phi)^{\lambda \times t}$. For simplicity let's assume that all flowers are open for exactly 3 days. 
 
 Let's build up our likelihood analysis in a few steps, starting with the visitation data. We need a function that gives us the NLL of our data (`visits`) given a value of $\lambda$. 
 ```{r pollination_visits_NLL}
@@ -313,7 +313,7 @@ We'll get some errors because the optimization routine is going below 0, etc., b
 mle2(poll.NLL, start=list(lambda=1, phi=0.5), data=list(visits=visits, fert=fert, size=20) )
 ```
 
-We have just used the two distinct datasets to estimate these two parameters! Very cool! (The actual values are nearly same as what we got using the naive, two-step approach above, but that will depend a lot on on both the data and the model formulation. In the long run, this approach will get you to the right answer a lot more reliably. It also gets you a likelihood and the ability to calculate confidence intervals, but that is next week!)
+We have just used the two distinct data sets to estimate these two parameters! Very cool! (The actual values are nearly same as what we got using the naive, two-step approach above, but that will depend a lot on on both the data and the model formulation. In the long run, this approach will get you to the right answer a lot more reliably. It also gets you a likelihood and the ability to calculate confidence intervals, but that is next week!)
 
 
 Homework
@@ -321,7 +321,7 @@ Homework
 
 The homework for this lab is to fit two models to a data set using likelihood. We'll use a simple data set and two simple, but realistic models.
 
-**The problem**: When large aquatic mammals die in the oceans, they fall to the sea floor and support a large assemblage of scavengers and decomposers. Most decomposition occurs during a "mobile-scavenger stage lasting months to years, during which aggregations of sleeper sharks, hagfish, rat-tails and invertebrate scavengers remove whale soft tissue at high rates" (Smith and Baco 2003). Such "Whale falls" must attract these scavengers from long distances. Smith and Baco (2003) present estimates of the mass and rates of decomposition of five natural and experimentally implanted whale carcasses off the coast of California, as well as the rates of decomposition for three small cetaceans observed in the North Atlantic (Jones et al. 1998). 
+**The problem**: When large aquatic mammals die in the oceans, they fall to the sea floor and support a large assemblage of scavengers and decomposes. Most decomposition occurs during a "mobile-scavenger stage lasting months to years, during which aggregations of sleeper sharks, hagfish, rat-tails and invertebrate scavengers remove whale soft tissue at high rates" (Smith and Baco 2003). Such "Whale falls" must attract these scavengers from long distances. Smith and Baco (2003) present estimates of the mass and rates of decomposition of five natural and experimentally implanted whale carcasses off the coast of California, as well as the rates of decomposition for three small cetaceans observed in the North Atlantic (Jones et al. 1998). 
 
 There are two questions I would like you to address with these data:
 
@@ -337,7 +337,7 @@ library(tidyverse)
 scav <- read_csv("WhaleFallScavenging.csv")
 scav
 ```
-`Location` is either Southern Californica (`SoCal`) or North Atlantic (`NAtl`).   
+`Location` is either Southern California (`SoCal`) or North Atlantic (`NAtl`).   
 `CarcWt` is the mass of the carcass in $kg$.   
 `ScavRt` is the scavenging rate in $kg/day4.   
 ```{r plot.scavdata}
@@ -346,7 +346,7 @@ ggplot(data=scav, aes(x = CarcWt, y = ScavRt, color = Location)) + geom_point()
 
 Maybe try changing the scale of the x-axis with `scale_x_log10()`.
 
-**The deterministic models**: If you plot the scavenging rate against the log of carcass mass, you might guess that the rate of scavenging increases linearly as the mass doubles (i.e., an exponential model). Indeed, the Smith and Baco (2003) used this model. Interesting this implies that carcasses that are ~ 5000 $Kg$ have already attracted 2/3rds of the scavengers in the area; it takes more and more mass to attract those few, reticent scavangers. 
+**The deterministic models**: If you plot the scavenging rate against the log of carcass mass, you might guess that the rate of scavenging increases linearly as the mass doubles (i.e., an exponential model). Indeed, the Smith and Baco (2003) used this model. Interesting this implies that carcasses that are ~ 5000 $Kg$ have already attracted 2/3rds of the scavengers in the area; it takes more and more mass to attract those few, reticent scavengers. 
 
 Alternatively, we might expect that the scavenging rate increases linearly with surface area of the whale. Cribbing from Woodward et al. (2006), we can expect the surface area ($SA$) in $m^2$ to increase with $\text{Mass}$ in $Kg$ as:
 $$
@@ -355,7 +355,7 @@ $$
   \end{aligned}
 $$
 
-If you can think of alternative models (monomolecular or Michaelis-Menton anyone?), try that as well.
+If you can think of alternative models (mono-molecular or Michaelis-Menton anyone?), try that as well.
 
 **The stochastic distribution**: Given what you know about the data, either from first principles or how it looks, choose a stochastic distribution to represent the error around the deterministic expectations. With so few observations it might be hard to be certain, but that's OK. Just make sure you understand what parameter(s) it requires and what they do.
 
@@ -363,4 +363,4 @@ If you can think of alternative models (monomolecular or Michaelis-Menton anyone
 
 **Model fitting**: You are welcome to use `optim()` or the `mle2()` function in `bbmle` package. Either way, you need to fit your models (via your likelihood functions) to the data.
 
-**What to submit**: I just want 1) a plot of your model predictions plotted on the scatter plot we've already made and 2) your MLEs and likeihood for each model.
+**What to submit**: I just want 1) a plot of your model predictions plotted on the scatter plot we've already made and 2) your MLEs and likelihood for each model.
