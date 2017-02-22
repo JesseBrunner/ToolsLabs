@@ -3,9 +3,9 @@ title: 'Lab7: Fitting models to data part 2: likelihood'
 author: "Jesse Brunner"
 date: '`r format(Sys.Date())`'
 output:
-  html_document:
-    toc: yes
   pdf_document:
+    toc: yes
+  html_document:
     toc: yes
 ---
 
@@ -251,7 +251,7 @@ visits <- c(1, 0, 1, 0, 2, 1, 2, 1, 0, 0)
 ```
 and we also came back and collected 15 samples of 20 flowers each to measure the proportion that were fertilized:
 ```{r data2}
-fert <- c(16, 13, 15, 15, 10, 13, 13, 20, 17, 19, 10, 13, 15, 12, 14)
+fert <- c(16, 13, 15, 12, 10, 13, 13, 16, 17, 19, 10, 13, 15, 12, 14)
 ```
 
 So let's be clear about the likelihood of each part. Assuming that flowers are visited randomly by pollinators, we would expect our data to be Poisson distributed with a rate parameter $\lambda$ (I sort of telegraphed that, didn't I?) and the fertilization data would be binomially distributed with a probability of success = $P(pollinated)= 1-(1-\phi)^{\lambda \times t}$. For simplicity let's assume that all flowers are open for exactly 3 days. 
@@ -316,10 +316,85 @@ mle2(poll.NLL, start=list(lambda=1, phi=0.5), data=list(visits=visits, fert=fert
 We have just used the two distinct data sets to estimate these two parameters! Very cool! (The actual values are nearly same as what we got using the naive, two-step approach above, but that will depend a lot on on both the data and the model formulation. In the long run, this approach will get you to the right answer a lot more reliably. It also gets you a likelihood and the ability to calculate confidence intervals, but that is next week!)
 
 
-Homework
+Likelihood with a complex deterministic function
+---------------------------------------------
+So far we have dealt with fitting very simple deterministic models (e.g., a constant probability of infection or a constant visitation rate) to our data with likelihood. Now let us consider a more complex deterministic model, the Holling type II functional response of predators to increasing densities of reed frog (_Hyperolius spinigularis_) tadpoles. Yes, this is the same function we fit  by eye and then using sums of squares. We are just going to repeat the process, only using likelihood as our metric.
+
+As a refresher, the Type II functional response is generally written as:
+$$
+	 \text{predation rate} = \frac{\alpha N_{prey}}{1+\alpha N_{prey}h}
+$$
+where $\alpha$ is the attack rate and $h$ is the handling time.
+
+```{r rffr_init}
+library(emdbook)
+library(tidyverse)
+data(ReedfrogFuncresp)
+p <- ggplot(ReedfrogFuncresp, aes(x=Initial, y=Killed)) + geom_point()
+p
+```
+
+Let's (re)create the function for the Holling type II functional response and see how it fits the data "by eyeball." It is helpful to remember that $\alpha \approx$ the slope at low densities and that $h \approx$ 1/asymptote. We'll try $a = 10/20$ and $h = 1/50$ for a start.
+```{r fithollingII}
+Holl2<-function(x, a, h){
+	(a*x)/(1+(a*h*x))
+}
+
+p + stat_function(fun = Holl2, args = list(a = 10/20, h = 1/50))
+```
+That's not a bad guess (and you should try some others) but we would like to _fit_ this model to the data in a more formal way, using likelihood. Again, we need to find a stochastic distribution with which we can connect our deterministic expectation to our actual data. Since our data are counts of how many tadpoles were killed (`Killed`) out of how many there were initially (`Initial`) a binomial distribution would seem to be appropriate. (Note: before when we used sums of squares we were implicitly assuming that our data were normally distributed. This, of course, is not a terribly good assumption for this type of data.)
+
+Of course the binomial requires a probability (`dbinom(..., prob = XXX)`), the _per capita_ probability of being eaten, not the overall number we'd expect to be eaten, which the Holling type II equation provides. On page 182 Bolker reminds us that if we were to divide both sides by $N$ we get the per capita predation rate:
+$$
+	 \text{Per capita predation rate} = \frac{\alpha}{1+\alpha N_{prey}h}.
+$$
+This is essentially a hyperbolic. This means that the _per capita_ predation rate of tadpoles decreases hyperbolically with tadpole density. See how a little bit of algebra can be so useful? Anyway, since the experiments are short we can assume that this rate $\approx$ the probability of being eaten during the experiment, and so this is the deterministic function we’ll use for our analysis. 
+
+So now we have both pieces in place, the deterministic model and the stochastic model. Next we write a negative log likelihood function, as we did before, but this time we’ll incorporate the deterministic model.
+```{r hollingNLL}
+hollingNLL<-function(N, k, a, h){
+	# calculate the deterministic expectation
+	predprob = a /(1+a*h*N)	
+	# then calculate the negative log-likelihood of the data given this expectation 
+	-sum(dbinom(k, prob=predprob, size=N, log=TRUE))
+}
+```
+
+This function says that the structure of the data is described by a binomial distribution (either killed or not), and that the probability of predation is explained by the Holling type II equation (or actually, by the hyperbolic version).  
+
+To find the parameter values that best describe these data we will use `mle2()` and give it the same initial values for $\alpha$ and $h$ that we used to plot the curve.  Again, $N$ is the initial number of tadpoles, and $k$ is the number of tadpoles killed. 
+```{r holling, warning=FALSE}
+# fit the model to the data 
+holling2.fit <- mle2(hollingNLL, start=list(a = 10/20, h = 1/50), 
+								data=list(N=ReedfrogFuncresp$Initial, k=ReedfrogFuncresp$Killed)
+								)
+holling2.fit
+```
+And again, we could fit this with the formula interface:
+```{r holling2, warning=FALSE}
+
+holling2.fit <- mle2(Killed ~ dbinom(prob= a/(1+a*h*Initial), size=Initial), 
+										 start=list(a = 10/20, h = 1/50), 
+										 data=ReedfrogFuncresp
+								)
+holling2.fit
+```
+
+Not too hard, right? The results are not that different from our starting values, so we made a good guess.  Plot this line onto your data points to see how different the two lines are. 
+
+Also, one last feature of the `mle2()` function: confidence intervals on parameters!
+```{r, warning=FALSE}
+confint(holling2.fit)
+```
+Maybe go back to your earlier models and look at the confidence intervals on their parameters...
+
+
+
+
+Homework 1 (optional)
 --------
 
-The homework for this lab is to fit two models to a data set using likelihood. We'll use a simple data set and two simple, but realistic models.
+This is optional homework. If you want another go at running through the motions with a simple data set and two simple, but realistic models, here's your chance!
 
 **The problem**: When large aquatic mammals die in the oceans, they fall to the sea floor and support a large assemblage of scavengers and decomposes. Most decomposition occurs during a "mobile-scavenger stage lasting months to years, during which aggregations of sleeper sharks, hagfish, rat-tails and invertebrate scavengers remove whale soft tissue at high rates" (Smith and Baco 2003). Such "Whale falls" must attract these scavengers from long distances. Smith and Baco (2003) present estimates of the mass and rates of decomposition of five natural and experimentally implanted whale carcasses off the coast of California, as well as the rates of decomposition for three small cetaceans observed in the North Atlantic (Jones et al. 1998). 
 
@@ -364,3 +439,17 @@ If you can think of alternative models (mono-molecular or Michaelis-Menton anyon
 **Model fitting**: You are welcome to use `optim()` or the `mle2()` function in `bbmle` package. Either way, you need to fit your models (via your likelihood functions) to the data.
 
 **What to submit**: I just want 1) a plot of your model predictions plotted on the scatter plot we've already made and 2) your MLEs and likelihood for each model.
+
+
+Homework 2 (NOT OPTIONAL): Fit a Ricker model to the myxomatosis data
+----------------------------------------------------
+
+We went through some simple analyses and then the  analysis of predation rates of tadpoles. The best way to make this stick is to do it again on your own, with a new data set. Your assignment is to analyze the myxomatosis data set in the `emdbook` package by trying to fit a Ricker model to these data. We will restrict our analyses just to Grade I (the most virulent) myxomatosis.
+```{r myxo, eval=FALSE}
+library(emdbook)
+data(MyxoTiter_sum)
+myxo <- subset(MyxoTiter_sum, grade == 1)
+```
+The analyses are analogous to what we just did (with a Ricker for a deterministic expectation and and Gamma for the stochastic distribution) so just adapt what we did (making sure  you understand it) and don't re-invent the wheel (unless you like that sort of thing). Bolker walks through this example (though his code is different from mine). If you get stuck, you can refer to the book, work with you fellow students, and even ask me questions. 
+
+I would like you to post a figure of your best-fit line to the myxomatosis data as well as your MLEs and NLL. 

@@ -3,9 +3,9 @@ title: 'Lab6: Fitting models to data part 1: by eye & sums of squares'
 author: "Jesse Brunner"
 date: '`r format(Sys.Date())`'
 output:
-  html_document:
-    toc: yes
   pdf_document:
+    toc: yes
+  html_document:
     toc: yes
 ---
 
@@ -36,22 +36,22 @@ p <- ggplot(data=ReedfrogFuncresp, aes(x=Initial, y=Killed)) + geom_point()
 p
 ```
 
-So, as we would expect, with higher densities of prey, the "kill rate" (number of prey killed per predator over the duration of the experiment) increases. Our job, then, is to see how each of the functional responses, type I--III, fit the data. (Note: if you read the original paper you'll note that the experiment does not conform perfectly to the normal experimental design used to estimate handling time and attack rates---they used 3 predators in each tank and ran the experiment for 14d, which leads to prey depletion---but for our purposes we'll just gloss over these details.)
+So, as we would expect, with higher densities of prey, the "predation rate" (number of prey killed per predator over the duration of the experiment) increases. Our job, then, is to see how each of the functional responses, type I--III, fit the data. (Note: if you read the original paper you'll note that the experiment does not conform perfectly to the normal experimental design used to estimate handling time and attack rates---they used 3 predators in each tank and ran the experiment for 14d, which leads to prey depletion---but for our purposes we'll just gloss over these details.)
 
-Let's see those forms again: 
+Let's see those forms again, remembering that $\alpha$ is the "attach rate" and $h$ is handling time: 
 
 **Holling Type I**
 $$
-\text{attack rate} = \alpha N_{prey}
+\text{predation rate} = \alpha N_{prey}
 $$
 **Holling Type II**
 $$
-\text{attack rate} = \frac{\alpha N_{prey}}{1 + \alpha N_{prey} h} 
+\text{predation rate} = \frac{\alpha N_{prey}}{1 + \alpha N_{prey} h} 
 $$
 
 **Holling Type III**
 $$
-\text{attack rate} = \frac{\alpha N^{c}_{prey}}{1 + \alpha N_{prey}^c h} 
+\text{predation rate} = \frac{\alpha N^{c}_{prey}}{1 + \alpha N_{prey}^c h} 
 $$
 Note: When we first saw the type III response, we set $c=2$, which is a common value, but others can be used.
 
@@ -278,7 +278,7 @@ Adding a level of complexity
 So now we have tried fitting three deterministic functions to the same data set. Often, however, we will be more interested in seeing how the _parameters_ of a model change between groups or levels of a treatment. For instance, what if Vonesh and Bolker had repeated their experiment with larger tadpoles? What would you expect would be different? A reasonable hypothesis would be that the attack rate wouldn't change very much, but the handling time might go up considerably since it takes longer to subdue and consume larger tadpoles. In other words, we might expect the kill rate to be a modified Holling type II,
 
 $$
-\text{attack rate} = \frac{\alpha N_{prey}}{1 + \alpha N_{prey} h_x}, 
+\text{predation rate} = \frac{\alpha N_{prey}}{1 + \alpha N_{prey} h_x}, 
 \text{where } h_x = 
 \begin{cases}
     h_L, & \text{if } size= \text{Large}\\
