@@ -1,315 +1,386 @@
 ---
-title: 'Testing hypotheses: confidence intervals, likelihood ratio tests, and Akaike''s
-  Information Criterion'
+title: 'Lab8: Testing hypotheses: confidence intervals, likelihood ratio tests, and
+  Akaikes Information Criterion'
 author: "Jesse Brunner"
-date: "March 1, 2015"
-output: html_document
+date: '`r format(Sys.Date())`'
+output:
+  pdf_document:
+    toc: yes
+  html_document:
+    toc: yes
 ---
 
-```{r setup, cache=FALSE, include=FALSE}
-library(knitr)
-# output <- opts_knit$get("rmarkdown.pandoc.to")
-opts_chunk$set(warning=FALSE, message=FALSE, cache=TRUE, fig.width=5, fig.height=4)
+```{r, echo=FALSE}
+knitr::opts_chunk$set(fig.width = 4, fig.height = 3)
 ```
 
-Our goals this week are to learn to test our statistical hypotheses using:
 
-1.  confidence intervals (see _last_ week)  
-2.  likelihood ratio tests, and  
-3.  Akaike's Information Criterion  
+Our goals this week are to learn to:  
 
-A model and hypotheses
-----------------------
+* estimate confidence intervals around those parameters, and 
+* understand "trade-offs" between parameters
+* test our hypotheses using
+   +  confidence intervals
+	 +  likelihood ratio tests, and
+   +  Akaike's Information Criterion
 
-Last week your homework was to fit a Ricker model to data on the titer of myxomavirus throughout infections. You only worked with data from the most virulent (Grade I) virus. This week we will consider the full data set. First, let's load the data and see what it consists of.
-```{r}
-library(emdbook)
-data(MyxoTiter_sum)
-myxo <- MyxoTiter_sum # shorter name to work with
-summary(myxo)
-```
-And then let's plot the data by grade.
-```{r}
-library(ggplot2)
-qplot(x=day, y=titer, data=myxo) + facet_wrap(~ grade) + geom_smooth()
-qplot(x=day, y=titer, data=myxo, color = factor(grade), 
-			fill = factor(grade)) + geom_smooth()
-```
-
-So it looks like grades 1, 3, & 4 might be somewhat similar, but grade 5 is quite different.
-
-
-Second, let us refresh our memories of what a Ricker function looks like mathematically:
-$$
-y = ax \times exp(-bx)
-$$
-
-and and graphed
-```{r}
-Ricker <- function(x, a, b){
-	a*x*exp(-b*x)
-}
-
-ggplot(data.frame(x=c(0,28)), aes(x)) +  
-	stat_function(fun=Ricker, geom="line", args=list(a=1, b = 1), color = "red") +
-	stat_function(fun=Ricker, geom="line", args=list(a=1, b = 0.2), colour="orange") +
-	stat_function(fun=Ricker, geom="line", args=list(a=2, b = 1), colour="blue") +
-	stat_function(fun=Ricker, geom="line", args=list(a=2, b = 0.2), colour="green") 
-```
-
-It looks like the peak of the Ricker is at $x = 1/b$ (try some of your own values to be sure). The height of the peak is determined by both $a$ and $b$ (I'll let you figure out the precise relationship). We thus have two parameters that can help us describe where along the x-axis the peak occurs (parameter $b$) and also how high the peack reaches (a combination of $a$ and $b$). This gives us some options in matching hypotheses about how viral titers change through time in the different grades with mathematical models.
-
-Let us write down five alternative hypotheses and their respective models:
-
-1.  Viral titers rise soon after exposure and then decline slowly over time
-    a.   in essentially the same way for each grade of virus.   
-$$
-y = a x \times exp(-bx)
-$$
-    b.  more virulent viruses reach higher titers than less virulent viruses, but at the same time.  
-$$
-y = a_{Grade} x \times exp(-bx)
-$$
-    c.   more virulent viruses reach their (same) peaks sooner than less virulent viruses.  
-$$
-y = ax \times exp(-b_{Grade}x)
-$$
-    d.   more virulent viruses reach higher peak titers, sooner.
-$$
-y = a_{Grade} x \times exp(-b_{Grade}x)
-$$
-
-2.  Viral titers rise soon after exposure, but do not decline until death. (Let's assume a Michaelis-Menton function.)
-$$
-y = \frac{ax}{b+x} 
-$$
-
-
-Fitting the five models to the data
-----------------------------------
-
-We can fit these models to the data fairly simply using Bolker's `mle2()`'s `parameter` option (look back a couple of weeks for an example, or just follow along). First, of course, we need to specify a function that gives us our negative log likelihood. 
-
-Bolker suggested using a gamma distribution for the errors since they are positive and slightly skewed high. The gamma distribution uses two paramters, a shape and a scale. It does not have a parameter for the mean (or expected value), but if you do some math, check out Bolker's book, or look at the help file for `dgamma`, you will see that the mean of the gamma is the scale times the shape parameter. We can thus calculate the mean titer (from the Ricker) and divide by the shape parameter to get the scale parameter (or vice versa). 
-
-```{r}
-gammaNLL <- function(a, b, shape, day, titer){
-  # calculate the deterministic expectation
-  meantiter = Ricker(x=day, a, b) # y=a*x*exp(-b*x)
-  
-  # then calculate the negative log-likelihood of the data given this expectation 
-  -sum(dgamma(titer, shape = shape,
-              scale = meantiter/shape, log=TRUE))
-}
-```
-
-We can the fit our basic model (model 1a) to the data pretty simply:
-```{r, warning=FALSE}
+Last week we fit a Holling type II functional response to the tadpole predation data.
+```{r holling, warning=FALSE}
+# load packages and data
+library(tidyverse)
 library(bbmle)
-m1.a <- mle2(gammaNLL, start=list(a=3, b=1/7, shape=5), 
-					 data=list(day=myxo$day, titer=myxo$titer))
-m1.a
+library(emdbook)
+data("ReedfrogFuncresp")
+
+hollingNLL<-function(N, k, a, h){
+	# calculate the deterministic expectation (PER CAPITA)
+	predprob = a /(1+a*h*N)	
+	# then calculate the negative log-likelihood of the data given this expectation 
+	-sum(dbinom(k, prob=predprob, size=N, log=TRUE))
+}
+
+# fit the model to the data 
+holling2.fit <- mle2(hollingNLL, start=list(a = 10/20, h = 1/50), 
+			data=list(N=ReedfrogFuncresp$Initial, k=ReedfrogFuncresp$Killed)
+			)
+holling2.fit
+
+# plot the data
+Holl2<-function(x, a, h){
+	(a*x)/(1+(a*h*x))
+}
+
+p <- ggplot(ReedfrogFuncresp, aes(x=Initial, y=Killed)) + geom_point()
+p + stat_function(fun = Holl2,
+			args = list(a = coef(holling2.fit)["a"], 
+									h = coef(holling2.fit)["h"]))
 ```
 
-Because we want to use the `parameters` list in the `mle2()` function to make certain parameters (e.g., $a$) a function of some other variable (i.e., grade), we need to start using the formula interface. We can re-write our first model fit as:
-```{r, warning=FALSE}
-m1.a <- mle2(titer ~ dgamma(shape=shape, scale= a*day*exp(-b*day) /shape), 
-						 start=list(a=3, b=1/7, shape=5), 
-						 data=list(day=myxo$day, titer=myxo$titer))
-m1.a
+We now have the means to find the MLE of the parameters of our models. That is really great, but it's not the whole story. How good a fit is it? Are the estimates precise or would a whole range of values give more or less the same degree fit? One very useful approach to this question is to construct (and plot) confidence intervals. 
+
+Confidence intervals
+=====================
+
+Plug-in Confidence intervals: how variable might our data be?
+--------------------
+
+First, let us use so-called "plug-in" confidence intervals around our best-fit line to make a plot like Figure 6.5a in Bolker's book. Let us construct this type of interval or "envelope"---a CI around each predicted point---and then think about what it represents. 
+
+First we’ll need vectors of x and y values precisely along the best fit line.  
+```{r vectors}
+# vector of initial tadpole densities
+xvec<-0:100
+# vector of predicted number of tadpoles eaten
+yvec<-Holl2(xvec, a=coef(holling2.fit)["a"], h=coef(holling2.fit)["h"])
 ```
 
-You will see that all that has changed is that we specify the NLL not with our function, but using the formula on the first line. It says that the `titer` is gamma distributed with a shape parameter = `shape` and a scale parameter equal to the Ricker prediction (`a*day*exp(-b*day)`) divided by the shape parameter.
+Next we’ll use `qbinom()` to estimate the 95% confidence intervals of the binomial distribution.  Use the ratio of the `yvec` (killed) over `xvec` (initial density) to get the predicted proportion or probability of being eaten, and feed it into `qbinom()` function to get the 97.5% and 2.5% probabilities given those predictions:  
+```{r vector_ci}
+upper<-qbinom(0.975, prob=yvec/xvec, size=xvec)
+lower<-qbinom(0.025, prob=yvec/xvec, size=xvec)
+```
+To plot our predictions and confidence intervals alongside the data, it will help to make a data frame with `xvec`, `yvec`, `upper`, and `lower`. We will plot in layers, starting with the confidence interval and the predicted values (using `geom_ribbon` and `geom_line`), and then the actual data points (`geom_point`) so that the data are in front of the confidence intervals.
+```{r plotpedictions}
+preds <- data.frame(xvec, yvec, upper, lower)
 
-If we use this formula interface notation, then creating model 1b (and the others) is pretty straightforward and does not involve creating new NLL functions.
-```{r, warning=FALSE}
-m1.b <- mle2(titer ~ dgamma(shape=shape, scale= a*day*exp(-b*day) /shape), 
-						 start=list(a=3, b=1/7, shape=5), 
-						 parameters=list(a ~ grade),
-						 data=list(day=myxo$day, titer=myxo$titer,
-						 					grade=myxo$grade)
-						 )
-m1.b
+ggplot(preds, aes(x=xvec, y=yvec, ymin = lower, ymax = upper)) + 
+	geom_ribbon(alpha=0.2) + # this plots the CI ribbon
+	geom_line() + # the predicted range
+	geom_point(data = ReedfrogFuncresp, 
+						 inherit.aes = FALSE, # these keeps the geom from looking for ymin/ymax
+						 aes(x = Initial, y = Killed)) +
+	labs(y="Killed", x="Initial number of tadpoles")
 ```
 
-We do run up against a conceptual issue, here. As written (and interpreted by R), we are saying that the virus grades are continuous values such that there could be a grade of 1.23 and also that the difference between grades 1 and 2 is the same as that between 3 and 4. Does that seem like a good approach to you?
+So it looks like all but one data point fall within the 95% CI of our predictions. This is great, and pretty much what we'd expect based on random variation, right (i.e., we have 1 of 16 points out of bounds, whereas our CI is predicting 1 of 20 would be).  However, what exactly is this "plug-in"" confidence interval representing? It is just the amount of variation we expect in our data given binomially-distributed errors, since we used a binomial distribution to link our data to our predictions, and the predicted values. In other words, this plug-in CI assumes that we know the parameters $a$ and $h$ of the Holling type II / hyperbolic function perfectly and that all of the uncertainty in our estimates comes from the fact that our data are binomially distributed. Had we used, say, a normal distribution to link our data to our underlying deterministic model our plug-in CI would be based on the predicted values (i.e., mean at any given x-value) and the estimated standard deviation. However, **these CIs do not include the uncertainty we have in our estimates of the parameters** $a$ and $h$. Remember, these parameters were estimated with uncertainty, too! 
 
-Not knowing more about how these grades were defined, it would seem that these are categories more than measures. (Indeed, these grades are usually defined by Roman numerals rather than numbers.) In that case, we would probably want to treat `grade` as levels of a factor
+A _prediction interval_, which is designed to estimate the value of _future_ observations, includes both the uncertainty in estimated parameters of the model and the variability in data produced by the model. This is very similar to the _posterior predictive distribution_ common in Bayesian analyses. Both are very useful in assessing the performance of the model against new data. We will get to the point where we simulate prediction intervals, but for now, let us just be careful about what we hope to represent with our confidence intervals. 
 
-```{r, warning=FALSE}
-m1.b <- mle2(titer ~ dgamma(shape=shape, scale= a*day*exp(-b*day) /shape), 
-						 start=list(a=3, b=1/7, shape=5), 
-						 parameters=list(a ~ grade),
-						 data=list(day=myxo$day, titer=myxo$titer,
-						 					grade=factor(myxo$grade))
-						 )
-m1.b
+Let us turn to confidence intervals on our parameters.
+
+Profile confidence intervals on parameters
+---------------------------
+
+Our goal now is to understand the uncertainty/confidence we have in our estimates. To do so we will calculate so-called "profile" confidence intervals. This is perhaps most easily understood by remembering that the likelihood of a model, given the data, changes with the parameter value(s) we choose. Parameter values with lower values of $\mathcal{L}$ (or higher values of the negative log-likelihood) are, well, less likely! At some point we can say that they are so unlikely that our parameter value has, say, a 97.5% chance of being above (or below) some cut off value. 
+For instance, holding $h$ constant at its MLE, we can see the NLL surface for $a$:
+```{r slice_a}
+# create a vector of a-values
+as <- seq(0.3, 0.8, length = 100)
+# and calculate the NLL for each value of as
+NLLs <- with(ReedfrogFuncresp, 
+					 sapply(X=as, FUN = hollingNLL, 
+					 			 h=coef(holling2.fit)["h"], N=Initial, k=Killed)) # these are all fixed
+
+ggplot(data.frame(as, NLLs), aes(as, NLLs)) + 
+	geom_point() + 
+	geom_vline(xintercept=coef(holling2.fit)["a"])
 ```
 
-Notice that this means that we have to estimate a lot more parameters this way! But also see that the differences between the values of $a$ for our intercept (grade I) and grades III and IV are pretty small while grade V is really quite different, which suggests that $a$ (and thus the height) does not change smoothly or linearly with increasing virus grades. In other words, it is probably more accurate to represent grades as categories.
+Somewhere along here we could say the the NLL is too high relative to its minimum and use that as our cutoff. But first, there's a problem. We have held $h$ constant as we tried each value of $a$, but it may well be that some other value of $h$ besides $h_{MLE}$ would minimize the NLL at, say, $a=0.4$ if we let it. In other words, some values of $a$ might be reasonable if we let $h$ vary to pick up the slack. In Bolker's parlance, we want the "profile" rather than the "slice" (see Fig. 6.7).
 
-You will also see that the NLL of m1.b is rather smaller than that of m1.a. 
-```{r}
--logLik(m1.a)
--logLik(m1.b)
-```
-So m1.b is a better fit, but it also had three more parameters to vary to achieve that better fit. Adding extra parameters, even if they are tied to _random noise_, will improve the fit, if just a little bit. 
+In essence, we want to vary one parameter, as above (e.g., $a$ is "fixed" at 0.30, 0.31, 0.32, ... or whatever values we choose) and then at each of those fixed parameter values re-optimize the fit with the other parameters free (here just $h$). Each time we do this we get the negative log-likelihood so that we can see how the NLL changes as we vary our fixed parameter (here $a$).  (To calculate the likelihood profile for $h$, we would do just the opposite.)
 
-```{r, warning=FALSE}
--logLik(mle2(titer ~ dgamma(shape=shape, scale= a*day*exp(-b*day) /shape), 
-						 start=list(a=3, b=1/7, shape=5), 
-						 parameters=list(a ~ randomnoise),
-						 data=list(day=myxo$day, titer=myxo$titer,
-						 					randomnoise=runif(149))
-						 ))
-```
-See? It's a smidge better than m1.a with this extra noise parameter. So the question is, is m1.b's fit better than we'd expect by chance? We will get back to this question soon---I just wanted to introduce the question in this simple case---but first let's fit the rest of the models.
-
-
-```{r, warning=FALSE}
-m1.c <- mle2(titer ~ dgamma(shape=shape, scale= a*day*exp(-b*day) /shape), 
-						 start=list(a=3, b=1/7, shape=5), 
-						 parameters=list(b ~ grade),
-						 data=list(day=myxo$day, titer=myxo$titer,
-						 					grade=factor(myxo$grade))
-						 )
-m1.c
-
-m1.d <- mle2(titer ~ dgamma(shape=shape, scale= a*day*exp(-b*day) /shape), 
-						 start=list(a=3, b=1/7, shape=5), 
-						 parameters=list(a ~ grade, b ~ grade),
-						 data=list(day=myxo$day, titer=myxo$titer,
-						 					grade=factor(myxo$grade))
-						 )
-m1.d
+It will help to note that we can fix parameter values pretty easily with the `mle2()` function.
+```{r holling_a, warning=FALSE}
+mle2(hollingNLL, start=list(h = 1/50), 
+		 fixed=list(a=0.4), # fix a at 0.2 and let h change to maximize the likelihood
+     data=list(N=ReedfrogFuncresp$Initial, k=ReedfrogFuncresp$Killed)
+)
+mle2(hollingNLL, start=list(h = 1/50), 
+		 fixed=list(a=0.45), # fix a at 0.3 and do the same
+     data=list(N=ReedfrogFuncresp$Initial, k=ReedfrogFuncresp$Killed)
+)
 ```
 
-The last model, m2, requires a different functional form; that of the Michaelis-Menton. Also note that we are not letting any parameters vary with grade.
-```{r, warning=FALSE}
-m2 <- mle2(titer ~ dgamma(shape=shape, scale= (a*day/(b+day)) /shape), 
-						 start=list(a=7.5, b=1, shape=5), 
-						 data=list(day=myxo$day, titer=myxo$titer)
-						 )
-m2
+We just want to loop through values of $a$, finding the NLL at each value. 
+```{r profile_a, warning=FALSE}
+# create a vector of a-values
+as <- seq(0.3, 0.8, length = 100)
+
+# a wrapper for the mle2 so we can use the apply fxn
+Holl_a_mle2 <- function(x) {
+	#fit model given a fixed at x		
+	LL <-	mle2(hollingNLL, start=list(h = 1/50), 
+						 fixed=list(a=x), 
+						 data=list(N=ReedfrogFuncresp$Initial, k=ReedfrogFuncresp$Killed)
+	)
+	# return NLL
+	return(-logLik(LL))
+}
+
+# apply this fxn across values of a
+NLLs_prof <- sapply(X=as, FUN=Holl_a_mle2)
+
+ggplot(data.frame(as, NLLs_prof, NLLs), aes(as, NLLs_prof)) + 
+	geom_point() + # profile
+	geom_point(aes(y=NLLs), color="red") + # slice
+	geom_vline(xintercept=coef(holling2.fit)["a"]) + 
+	geom_hline(yintercept=50, color="gray") # an arbitrary cutoff
 ```
 
-Testing hypotheses with confidence intervals
---------------------------------------------
+So we can see how the NLL increases (gets worse) as we move away from the MLE of $a$ (= `r round(coef(holling2.fit)["a"], 3)` and that things get worse more quickly if we do not let $h$ change from its MLE (red). Likewise, if our cutoff for the 95% CI was NLL=50 (gray line) then we would have a much narrower "slice" CI than a "profile" CI. But how do we find a cutoff with more precision that just eyeballing it? 
 
-So we have these five models fit to the data, but now we want to know what they can tell us. Model m1.b, for instance, allowed $a$ to vary with grade, which mean that the _height_ of the curves could change, but not the timing or shape of the curve. So is this a good fit? Are these extra parameters account for real differences?
+We can develop a cutoff from the likelihood ratio test (see below, and EMD pp 191-193 for the logic). For a _univariate_ cutoff we refer to the $1-\alpha=$ 95th quantile of the $\chi^2$ distribution with 1 degree of freedom: 
+$$
+\text{cut off} = \widehat{NLL} + \chi^2_{df=1} ( 1-\alpha)/2,
+$$
+which is the NLL + `qchisq(p=0.95,df=1)/2` = NLL + `r qchisq(0.95,1)/2`. 
 
-One way to tell whether a predictor in your model is "significant" is to see if the confidence interval on its parameter is significantly different from zero. We do this a lot in regression. Is, for instance, the slope significantly different from zero? Does it's confidence interval include or exclude zero? We can use the same appoach here:
-```{r, warning=FALSE}
-confint(m1.b)
+In our example, the cutoff for the NLL for a 95% _univariate_ CI is:
+```{r cutoff_a1}
+# The lowest NLL for our best-fit model is
+-logLik(holling2.fit)
+
+# The cutoff is this plus 1.92
+(cutoff <- -logLik(holling2.fit)[1] + qchisq(0.95,1)/2)
 ```
-You will see that the 95% CIs of the parameters `a.grade3` and `a.grade4` _do_ encompass zero, which means that they are not significantly different from the value of $a$ for the baseline (intercept) grade (grade=1). The last grade, though, has a parameter that _does not_ include zero; it's value of $a$ is significantly different from the baseline grade!
 
-So if our question is, does the height of the curves (the maximum titers) differ between grades?, our answer is, grade 5 differs from grade 1; the other grades do not. This approach does not,  however, answer the question of whether there is an overall significant effect of grade on the height of the curves (maximum titers). For this, we want to compare the fit of models with and without this effect included. (If there were only one parameter for `grade`, as we started with assuming that `grade` was a continuous variable, then the results would be the same. Here there is no single parameter for the effect of `grade`, so the results can differ between the two approaches.)
+What values of $a$ are associated with our lowest NLL + 1.92? 
+```{r cutoff_a2}
+# find values of NLL within +/- 0.1 of the cutoff
+NLLs_prof[ NLLs_prof < cutoff + 0.1 & NLLs_prof > cutoff - 0.1 ]
 
-Testing hypotheses with likelihood ratio tests
----------------------------------------------
+# find the values of "a" associated with these NLLs close to the cutoff
+as[ NLLs_prof < cutoff + 0.1 & NLLs_prof > cutoff - 0.1 ]
+```
+So it looks like our 95% confidence interval around $a$ goes from somewhere around 0.401 and  up to somewhere between 0.679 and 0.684. If you are fine with this level of precision (the cutoff comes from an approximation that only holds when $N$ is very large after all!) then you've found your answer. If you want more precision, we will need to interpolate using the `approx()` function.
+```{r profileCI_a}
+# extract the NLLs on the left (lower) side of the curve, up to the minimum NLL
+as.NLL.lower <- NLLs_prof[1:which.min(NLLs_prof)]
+# and the values of "a"" associated with them
+as.lower <- as[1:which.min(NLLs_prof)]
+# feed them into the approx function
+approx(as.NLL.lower, as.lower, xout = cutoff)
+# and repeat for the right (upper) side of the curve
+as.NLL.upper <- NLLs_prof[which.min(NLLs_prof):length(NLLs_prof)]
+as.upper <- as[which.min(NLLs_prof):length(NLLs_prof)]
+approx(as.NLL.upper, as.upper, xout = cutoff)
+```
+So, more precisely, our 95% CI on $a$ is 0.4025 -- 0.6825! Again, you can simply repeat this process for the other parameter, $h$. In fact it would be a good exercise for you. You could even write your own function to do the tedious bits. But most the time you won't need to do this by hand. I wanted you to see the logic of the profile 95% CI, but the `bbmle` package has some extra magic in it. We can do all of this (for both parameters) with just a few function calls. (We can also get "slice" CIs with the `slice()` function.)
+```{r, warning=FALSE, fig.width=6}
+CIs <- confint(holling2.fit)
+CIs
+plot(profile(holling2.fit))
+```
 
-A likelihood ratio test tests whether the difference in deviance between two models, one that is nested within the other, is likely do to chance. (Deviance = $2 \times$ NLL.) It is a classic frequentist, P-value yeilding test. The difference in the deviance between two nested models is (asymptotically) distributed as a $\chi^2$ with degrees of freedom equal to the difference in the number of paramters between the two models. Let us walk through this:
-```{r}
-# deviance of the first model
--logLik(m1.a)*2
-# deviance of the second model
--logLik(m1.b)*2
+(Note that the graph looks different---sharper---than the graph we made above. This is because this function plots the square-root of the **deviance** (difference from the minimum NLL), which is approximately normally distributed. See `vignette("mle2",package="bbmle")` for more if you like.) Spend a bit of time making sure you understand what was done to get those CIs and the plots. Do you see where on the y-axis the 95% CI line is? Why is it at this value? 
+
+Anyway, most of the time this it is sufficient to report these confidence intervals on your parameter estimates. And just like with regular 95% CIs, if they do not overlap with zero then your parameter is "significantly" different from zero. But remember, as with all of these frequentist approximations, they only work when $N$ is large; that is they are _asymptotically_ correct. Also, these CIs (and the likelihood ratio tests we will see soon) work only when the MLE of the parameter is not near an edge of allowable parameter values (e.g., $h$ is not too close to zero). So caution is warranted when using these (or any!) approximations.
+
+
+2D Likelihood surfaces for two parameters at a time
+------------------------------------------------
+
+As we have already seen, the two parameters of our model, $a$ and $h$, do not affect the NLL independent, but rather their effects are often correlated. With a little thought we might expect that if the attack rate is low, then the handling time would have to be low as well to fit the data. (Not sure you see that? Go back and try different combinations of parameters to see which types of combinations provide reasonable fit to the data.) In order to visualize (and thus better understand) the covariance of our parameters and to find the bivariate confidence limits, we need to plot a 2-dimensional likelihood surface.  
+
+Basically, we want to see how the likelihood changes as we change $a$ and $h$ simultaneously.  What we’ll end up with will look something like Figure 6.7. Also, since our model only has two parameters, both of which we are manually varying, we no longer need to use `mle2()`...there is nothing to optimize! We need only get the NLL for each combination of $a$ and $h$. If you were going to do this with a model that had other parameters, you would need to optimize the other free parameters.
+
+So we are going to create a data set of all combinations of $a$ and $h$ (within reason) and then calculate the NLL of each. There is a multiple vector version of `sapply` called `mapply` we could use to apply our function over both parameters and there appears to be a tidyverse version of things, but I can't get either work without significantly rewriting our `hollingNLL` function, and that seems counter productive. So let's just use a damn `for` loop:
+
+```{r bivariate}
+# create our vectors of "a" and "h" values
+a <- seq(0.3, 0.75, length = 50)
+h <- seq(0.0025, 0.030, length = 50)
+
+# this function will create a dataframe 
+# with all combinations of the variables you give it.
+df <- expand.grid(a=a,h=h)
+# add in a column to hold the NLL values
+df$NLL <- 0
+
+
+# the cycle through the rows in the dataframe 
+for(i in 1:dim(df)[1]){
+		# calculate the NLL given these params
+		df$NLL[i] <- hollingNLL(a = df$a[i], h = df$h[i], 
+			N = ReedfrogFuncresp$Initial, k = ReedfrogFuncresp$Killed)
+}
+```
+
+We can then plot the 2D map using `geom_tile()` and use `scale_fill_gradient2()` to specify colors according to values of NLL. We use the limits to focus on values relatively close to the minimum NLL...if we don't the scale gets washed out since NLL values go well above 150. Also, remember that since we are using a _bivariate_ confidence interval, we need to use two degrees of freedom for the cutoff.
+
+```{r 2D, warning=FALSE}
+(cutoff <- -logLik(holling2.fit)[1] + qchisq(0.95, 2)/2)
+
+ggplot(df, aes(x = a, y = h, fill = NLL)) +   
+	geom_tile(aes(fill = NLL), colour = "white") +   
+	scale_fill_gradient2(low = "red", mid = "white", high = "blue", 
+			midpoint = cutoff, 
+			limits = c(-logLik(holling2.fit), -logLik(holling2.fit)+6) )
+```
+
+So this gives us red values with lower values of our negative log-likelihood. Let's put in a contour line at the cutoff value (our NLL + `r round(qchisq(0.95, 2)/2)`) for the _bivariate_ confidence interval. Lastly we add a point for the MLE of $a$ and $h$. I also added some dotted lines to show the univariate profile confidence intervals for each parameter. 
+```{r 2D_2,warning=FALSE, fig.width=6, fig.height=5}
+ggplot(df, aes(x = a, y = h, fill = NLL)) +   
+	geom_tile(aes(fill = NLL), colour = "white") +   
+	scale_fill_gradient2(low = "red", mid = "white", high = "blue", 
+			midpoint = cutoff, 
+			limits = c(-logLik(holling2.fit), -logLik(holling2.fit)+6) ) +
+	stat_contour(aes(z = NLL), breaks = cutoff, color="black") +
+	geom_hline(yintercept=CIs["h",], linetype=3) + 
+	geom_vline(xintercept=CIs["a",], linetype=3) + 
+	geom_point(aes(x = coef(holling2.fit)["a"], y = coef(holling2.fit)["h"]))
+```
+
+So what does this show us? Well, as we predicted, our fit depends on $a$ and $h$ together. We cannot change one without the other changing to compensate for it. We can get basically the same fit (NLL) by simultaneously increasing (or decreasing) $a$ and $h$. This is actually pretty common and is worth recognizing. In some cases you can avoid this correlation by Re-parameterizing your model. But not always. Just be aware of it, think about what it means, and be careful.
+
+
+
+Testing or comparing models
+=========================
+
+Now all of this---fitting models to data with likelihood, constructing confidence intervals---is in service of understanding something about the biology of our system. In the example we have been working with, we might be interested in handling time and how it affects the functional response of predators (i.e., per predator predation rate) and conversely, the mortality rate of prey. We've done the hard work and estimated parameters, etc. So what have we learned? Well, in a sense that depends on what it was that we wanted to know. 
+
+Effect sizes and precision
+--------------------------
+We might be interested in estimating the handling time in and of itself, for instance because we wanted to use this information in a model or to extrapolate our results to tadpole survival rates. In this case, we've already gotten what we needed. We found that handling time = `r round(coef(holling2.fit)["h"],4)` of the time period (here 14 days of the experiment per prey item (~ `r round(coef(holling2.fit)["h"]*14*24,2)` hours) with a 95% confidence interval of `r round(CIs["h",1],4)` -- `r round(CIs["h",2],4)`. 
+
+Does the confidence interval overlap some null value?
+----------------------------------------------------
+Alternatively, we might be interested in whether the handling time is different from some value. I know you are thinking, we want to test whether $h = 0$. Well, yes and no. First, does that even make any biological sense for handling time to be zero? Probably not. Predators will almost always take a _bit_ of time to eat their prey. Still, we might be interested in whether handling time is large enough that it actually causes the functional response (=per predator predation rate) to begin to saturate. That is, is handling time much greater than zero over the range of prey we used? And so then yes, we might be interested in whether we can be confident that $h > 0$. Again, we have a 95% confidence interval on $h$ of `r round(CIs["h",1],4)` -- `r round(CIs["h",2],4)`, which does not include zero. And our best estimate of $h$ implies that the functional response is half-way to leveling off at a density of 100 tadpoles (it will eventually level off at $1/h =$ `r round(1/coef(holling2.fit)["h"],1)` prey per 14 days). So from this point of view, we can probably say that handling time is sufficiently greater than zero to matter.
+
+Give me a P-value! Likelihood ratio tests
+-----------------------------------------
+I hear it. You want a P-value. You want to know the probability of observing our results (or something more extreme) _if_ a null hypothesis, say the type I functional response (i.e.,  $\text{predation rate} = \alpha N_{prey}$), were True. Well, we can come close. We can ask whether the evidence or likelihood ratio of the two models provides greater support for the more complex model than we would expect by chance. This looks like:
+$$
+\frac{\mathcal{L}_{TypeII}}{\mathcal{L}_{TypeI}} > chance,
+$$
+except we work with deviance (= $2 \times$ NLL) and since we are working with log$\mathcal{L}$, we can just subtract them. The difference in the deviance between two _nested_ models is (asymptotically) distributed as a $\chi^2$ with degrees of freedom equal to the difference in the number of parameters between the two models. It is a classic frequentist, P-value yielding test. 
+Let us walk through this:
+```{r LRT1, warning=FALSE}
+# First fit the type I model
+holling1.fit <- mle2(Killed ~ dbinom(prob=a, size=Initial),
+										 start=list(a=1/2),
+										 data=ReedfrogFuncresp)
+# just for comparison:
+coef(holling1.fit)
+coef(holling2.fit)
+
+# deviance of the type I model
+-2*logLik(holling1.fit)[1]
+
+# deviance of the type II model
+-2*logLik(holling2.fit)[1]
+
 # difference in the deviances
--logLik(m1.a)*2 - -logLik(m1.b)*2
+-2*logLik(holling1.fit)[1] - -2*logLik(holling2.fit)[1]
 
-# Since there there is a difference of 6-3 = 3 paramters 
-# between the two models, we will use 3 degrees of freedom
-pchisq(48.89, df=3, lower.tail=FALSE)
+# Since there there is a difference of 2-1 = 1 paramters 
+# between the two models, we will use 1 degree of freedom
+pchisq(10.99606, df=1, lower.tail=FALSE)
 ```
 We can get the same test a bit more succinctly with:
 ```{r}
-anova(m1.a, m1.b)
+anova(holling1.fit, holling2.fit)
 ```
-So our likelihood ratio test says that it is exceedingly unlikely that we would get a difference in deviance of 48.89 or larger by chance if the models were, in fact, equivalent (i.e., if grade was actually unrelated to $a$). In other words, _not_ allowing $a$ to vary with the grade makes the fit of the model significantly worse. 
+So our likelihood ratio test says that it is exceedingly unlikely that we would get a difference in deviance of 10.996 or larger by chance if the models were, in fact, equivalent (i.e., if the functional response was essentially linear). In other words, _not_ allowing $h$ to be greater than zero makes the fit of the model significantly worse. 
 
-We can also make other pairwise comparisons of the models m1.x:
-```{r}
-anova(m1.a, m1.c)
-```
-So letting parameter $b$ to vary with grade is also a significant improvement over the model with both $a$ and $b$ fixed. 
-```{r}
-anova(m1.b, m1.d)
-anova(m1.c, m1.d)
-```
-It also appears that a model allowing _both_ $a$ and $b$ to vary with grade fits significantly better than allowing just one of these paremeters to vary. Indeed, if we look at the confidence intervals on the parameters of this "full" model we see that most every parameter is significantly different from zero.
-```{r}
-confint(m1.d)
-```
+Why do I keep harping on confidence intervals when you can so easily get a P-value? There are two primary reasons. First, knowing that a particular summary statistic (e.g., likelihood ratio) or one that is larger is exceedingly unlikely _given a null hypothesis_ is useful in telling us that our null hypothesis is not supported by the data, but after that, it sort of falls flat. A P-value says nothing about how big an effect is or about its precision, which is almost always what I want to know next. It is just, in essence, a ratio of signal to noise. Second, while we tend to use P-values as metrics of evidence (small values = stronger evidence) they really are not that at all. And they are very noisy. Try simulating data sets, refitting the models, and compare the P-values among simulated data sets. Then compare the CIs. You will find that the CIs remain relatively consistent among data sets, but that P-values bounce around by orders of magnitude. In other words, they don't give us what we most often want. OK, off the soap box. 
 
-What if we got different answers when we compared m1.d with m1.b and m1.c? That is, what if the full model was not significantly better than one model, but was significantly different from the other?  These two models with a single parameter varying with grade are both nested in the full model with both parameters varying, but which comparison would you trust? Similarly, how can you compare models m1.b and m1.c? And what about comparing our m1.x models with m2, which has a different functional form entirely? 
-
-In short, you cannot. You can only compare nested models with likelihood ratio tests. So let's move on to AIC.
-
-Testing hypotheses (or comparing models) with AIC
+Comparing models with AIC
 ---------------------------------------------
 
-In a broad sense we are interested in how well a model fits the data, which we measure with negative log-likelihood (or before with sums of squares), but we want to keep our models as simple as possible. We saw earlier that including even a random variable improved the fit of the model simply because it gave the model another free parameter to use. So we want a metric of model fit discounted by model complexity. The solution is Akaiki's information criteria (AIC). 
+In a broad sense we are often interested in how well a model fits the data, which we measure with negative log-likelihood (or before with sums of squares), but we want to keep our models as simple as possible. We saw earlier that including even a random variable improved the fit of the model simply because it gave the model another free parameter to use. So we want a metric of model fit discounted by model complexity. The solution is Akaiki's information criteria (AIC). 
 $$
 AIC = -2\times ln(\mathcal{L}) + 2k,
 $$
-where $\mathcal{L}$ is the likelihood (and hence the left part is simply twice the negative log likilihood) and $k$ is the number of parameters in the model, including, for instance, the parameters of the stochastic distribution. 
+where $\mathcal{L}$ is the likelihood (and hence the left part is simply twice the negative log likelihood) and $k$ is the number of parameters in the model, including, for instance, the parameters of the stochastic distribution. (Yes, yes. There is some theory related to entropy, etc. We should talk about that. But for current purposes we'll side-step the theory of why this works for the moment and just note there is a fit part and a penalty for complexity.) The idea is that models with lower AIC values are a better, more reasonable fit than models with higher AIC values. 
 
-We'll side-step the theory of why this works for the moment, but in general we can see that there is a fit part and a penalty for complexity. The idea is that models with lower AIC values are a better, more reasonable fit than models with higher AIC values. The actual values of AIC are not very useful, but the differences in AIC are. If differences in AIC ($\Delta AIC$) are within 2 or 3, one generally concludes that models are more or less equivalent, that there is no evidence that one is better than the other. With differences of 5 or more, the model with the lower AIC is better, and when differences are greater than 10, the model(s) with the worse AIC value are considered very poor, probably worth discarding all together.
+The actual values of AIC are not very useful, but the differences in AIC are. If differences in AIC ($\Delta AIC$) are within 2 or 3, one generally concludes that models are more or less equivalent, that there is no evidence that one is better than the other. With differences of 5 or more, the model with the lower AIC is better, and when differences are greater than 10, the model(s) with the worse AIC value are considered very poor, probably worth discarding all together. These are rules of thumb. And all of this also assumes that we have a "good" model in our set of models, otherwise we're choosing between piles of doo doo. 
 
-Let us illustrate with models m1.a-c. 
+Let us illustrate with the two models of the functional response: 
+
 ```{r}
-# model m1.a; remember the 'log Lik' and '(df=3)` are leftover from the logLik() call
-(a <- -2*logLik(m1.a) + 2*3)
-
-# model m1.b
-(b <- -2*logLik(m1.b) + 2*6)
-
-# model m1.c
-(c <- -2*logLik(m1.c) + 2*6)
-
-a-b # difference between m1.a and m1.b
-a-c # difference between m1.a and m1.c
-b-c # difference between m1.b and m1.c
+AIC(holling1.fit, holling2.fit)
+# or more compellingly
+AICtab(holling1.fit, holling2.fit, base = TRUE)
 ```
-So it looks like of the three model, model m1.c is the best, by a long-shot. To make this clearer we can use some built-in functions
-```{r}
-AIC(m1.a, m1.b, m1.c)
-AICtab(m1.a, m1.b, m1.c, base = TRUE)
-```
-This makes it clear that while model m1.b is much better than m1.a, m1.c is by far superior.
+Remember that the lowest AIC value is (relatively) "best" and that what we are really interested in is the difference in values, `dAIC` in the table, which we usually write as $\Delta$AIC. So in our case, there seems to be much greater support for the Holling type II functional response with handling time than that without. 
 
-There are, of course, some caveats. First, AIC, like all statistics it seems, assumes a large sample size (and a few other things we need to dicuss in class). There is, however, a small-size corrected version of AIC:
+There are, of course, some caveats. First, AIC, like all statistics it seems, assumes a large sample size (and a few other things we need to discuss in class). There is, however, a small-size corrected version of AIC:
 $$
 AICc = AIC + \frac{2k(k+1)}{n-k-1}
 $$
 
 We can get these values pretty simply with:
 ```{r}
-AICctab(m1.a, m1.b, m1.c, base = TRUE, nobs = 149)
+AICctab(holling1.fit, holling2.fit, base = TRUE, nobs = 16)
 ```
-In this case, it doesn't change our results that much, but with smaller sample sizes the AICc metric becomes more and more conservative, so more complex models have to be _much_ better fits to make up for steep penalties for extra parameters.
+In this case, it doesn't change our results that much, but with smaller sample sizes the AICc metric becomes more and more conservative, so more complex models have to be _much_ better fits to make up for steep penalties for extra parameters. Note that AICc is not always appropriate, especially for non-linear models with non-normal errors. That is, it's probably not appropriate for our model! 
 
-Within a set of models, we can calculate evidentiary _weights_ for each model, which add up to one. The weight,
+Within a set of models, we can also calculate evidentiary _weights_ for each model, which sum to one. The weight,
 $$
-w_i = \exp \left( \frac{(AIC_{min} - AIC_i)}{2} \right)
-$$ is the relative likelihood of model $i$. This is useful because you can sum up the weights for similar models or models that meet certain criteria (e.g., you could add up the weights of models that allowed parameter $b$ to vary) to establish their combined support amongst the models. 
+w_i = \exp \left( \frac{AIC_{min} - AIC_i}{2} \right)
+$$ 
+is the relative likelihood of model $i$. This is useful because you can sum up the weights for similar models or models that meet certain criteria (e.g., you could add up the weights of models that allowed parameter $b$ to vary) to establish their combined support among the models. 
 
 Again, these values are easy to obtain by hand or with:
 ```{r}
-AICctab(m1.a, m1.b, m1.c, base = TRUE, nobs = 149, weights = TRUE)
+AICtab(holling1.fit, holling2.fit, base = TRUE, weights = TRUE)
 ```
+But also, again, these weights may not be appropriate for our models. Unfortunately, AIC-related metrics may not be the simple solution to all of our problems that many of us had hoped!
 
-And we can easily construct the same table for the full set of models, including the model with a different functional form!
-```{r}
-AICctab(m1.a, m1.b, m1.c,  m1.d, m2, base = TRUE, nobs = 149, weights = TRUE)
-```
-So it is clear that the "full" model, with both $a$ and $b$ varying with grade is by far the best model (of this set); the other models are very distant runners up and could probably be ignored out of hand. Model m2, however, is surprisingly good. It would be interesting to try different versions of m2 allowing it's parameters to vary! In fact...
+
 
 Homework
--------
+==============
 
-Your homework is to fit and contrast the four versions of model 2, the Michaelis-Menton, to the data allowing the parameters $a$ and $b$ (or both) to vary with `grade`. (Remember that while they share names, these parameters have different functions in the Ricker and M-M models!)  All I want from you is an AICc table with weights and a figure showing the best-fit model and the data. 
+I have two questions for you to answer with the myxomatosis data:
 
+  1) Do titers generally rise and then decline, or do they rise and generally stay high? Does this answer vary with the virulence "grade"? 
+  2) Given a model, do grades 1--4 differ substantially in the parameters of the model (meaning how quickly they rise, etc.)? 
 
+```{r}
+library(emdbook)
+data(MyxoTiter_sum) 
+ggplot(MyxoTiter_sum, aes(x=day, y=titer)) + 
+	geom_point() + 
+	facet_wrap(~ grade) + geom_smooth()
+```
 
+For the first question you will want to fit and contrast the the Ricker and Michaelis-Menton models. Which one is a better fit? How does this change by grade? How can you test this last part in a simple, straightforward way? 
+Also remember that while parameters $a$ and $b$  share names, they have different functions in the Ricker and M-M models!  
+
+For the second question you will want to make the parameters of your model a function of grade. But be careful how you do this. (Hint: does grade 1 + grade 3 = grade 4?)
+
+I want to you post a concise (and clean) answer to these questions, as you would in a manuscript's results section.  
