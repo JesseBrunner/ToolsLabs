@@ -4,9 +4,9 @@ title: 'Lab8: Testing hypotheses: confidence intervals, likelihood ratio tests, 
 author: "Jesse Brunner"
 date: '`r format(Sys.Date())`'
 output:
-  pdf_document:
-    toc: yes
   html_document:
+    toc: yes
+  pdf_document:
     toc: yes
 ---
 
@@ -317,16 +317,18 @@ So our likelihood ratio test says that it is exceedingly unlikely that we would 
 
 Why do I keep harping on confidence intervals when you can so easily get a P-value? There are two primary reasons. First, knowing that a particular summary statistic (e.g., likelihood ratio) or one that is larger is exceedingly unlikely _given a null hypothesis_ is useful in telling us that our null hypothesis is not supported by the data, but after that, it sort of falls flat. A P-value says nothing about how big an effect is or about its precision, which is almost always what I want to know next. It is just, in essence, a ratio of signal to noise. Second, while we tend to use P-values as metrics of evidence (small values = stronger evidence) they really are not that at all. And they are very noisy. Try simulating data sets, refitting the models, and compare the P-values among simulated data sets. Then compare the CIs. You will find that the CIs remain relatively consistent among data sets, but that P-values bounce around by orders of magnitude. In other words, they don't give us what we most often want. OK, off the soap box. 
 
-Comparing models with AIC
+Comparing models with $AIC$
 ---------------------------------------------
 
-In a broad sense we are often interested in how well a model fits the data, which we measure with negative log-likelihood (or before with sums of squares), but we want to keep our models as simple as possible. We saw earlier that including even a random variable improved the fit of the model simply because it gave the model another free parameter to use. So we want a metric of model fit discounted by model complexity. The solution is Akaiki's information criteria (AIC). 
+In a broad sense we are often interested in how well a model fits the data, which we measure with negative log-likelihood (or before with sums of squares), but we want to keep our models as simple as possible. We saw earlier that including even a random variable improved the fit of the model simply because it gave the model another free parameter to use. So we want a metric of model fit discounted by model complexity. The solution is Akaiki's information criteria ($AIC$). 
 $$
 AIC = -2\times ln(\mathcal{L}) + 2k,
 $$
-where $\mathcal{L}$ is the likelihood (and hence the left part is simply twice the negative log likelihood) and $k$ is the number of parameters in the model, including, for instance, the parameters of the stochastic distribution. (Yes, yes. There is some theory related to entropy, etc. We should talk about that. But for current purposes we'll side-step the theory of why this works for the moment and just note there is a fit part and a penalty for complexity.) The idea is that models with lower AIC values are a better, more reasonable fit than models with higher AIC values. 
+where $\mathcal{L}$ is the likelihood (and hence the left part is simply twice the negative log likelihood) and $k$ is the number of parameters in the model, including, for instance, the parameters of the stochastic distribution. (Yes, yes. There is some theory related to entropy, etc. We should talk about that. But for current purposes we'll side-step the theory of why this works for the moment and just note there is a fit part and a penalty for complexity.) The idea is that models with lower $AIC$ values are a better, more reasonable fit than models with higher $AIC$ values. 
 
-The actual values of AIC are not very useful, but the differences in AIC are. If differences in AIC ($\Delta AIC$) are within 2 or 3, one generally concludes that models are more or less equivalent, that there is no evidence that one is better than the other. With differences of 5 or more, the model with the lower AIC is better, and when differences are greater than 10, the model(s) with the worse AIC value are considered very poor, probably worth discarding all together. These are rules of thumb. And all of this also assumes that we have a "good" model in our set of models, otherwise we're choosing between piles of doo doo. 
+The actual values of $AIC$ are not very useful, but the differences in $AIC$ are. If differences in $AIC$ ($\Delta AIC$) are within 2 or 3, one generally concludes that models are more or less equivalent, that there is no evidence that one is better than the other. With differences of 5 or more, the model with the lower $AIC$ is demonstrably better, and when differences are greater than 10, the model(s) with the worse $AIC$ value are considered very poor, probably worth discarding all together. These are rules of thumb. In fact there are many rules of thumb running around. I am now leaning towards Shane Richards' recommendation of retaining models with $\Delta AIC \leq 6$, which corresponds with a 95% chance of retaining the model with the lowest expected Kulback-Leibler distance (See Richards 2015, Likelihood and model selection, Ch. 3 _in_ Fox et al. _Ecological Statistics: Contemporary Theory and Application_. Oxford University Press). He also recommends kicking out models within this cutoff that have a simpler, nested version with lower $AIC$ values (or within ~ 2); their extra parameters are not really doing much to improve their fit!
+
+Also remember that selection assumes that we have a "good" model in our set of models, otherwise we're choosing between piles of doo doo. 
 
 Let us illustrate with the two models of the functional response: 
 
@@ -335,9 +337,8 @@ AIC(holling1.fit, holling2.fit)
 # or more compellingly
 AICtab(holling1.fit, holling2.fit, base = TRUE)
 ```
-Remember that the lowest AIC value is (relatively) "best" and that what we are really interested in is the difference in values, `dAIC` in the table, which we usually write as $\Delta$AIC. So in our case, there seems to be much greater support for the Holling type II functional response with handling time than that without. 
-
-There are, of course, some caveats. First, AIC, like all statistics it seems, assumes a large sample size (and a few other things we need to discuss in class). There is, however, a small-size corrected version of AIC:
+Remember that the lowest $AIC$ value is (relatively) "best" and that what we are really interested in is the difference in values, `dAIC` in the table, which we usually write as $\Delta AIC$. So in our case, there seems to be much greater support for the Holling type II functional response with handling time than that without. 
+There are, of course, some caveats. First, $AIC$, like all statistics it seems, assumes a large sample size (and a few other things we need to discuss in class). There is, however, a small-size corrected version of $AIC$:
 $$
 AICc = AIC + \frac{2k(k+1)}{n-k-1}
 $$
@@ -346,19 +347,21 @@ We can get these values pretty simply with:
 ```{r}
 AICctab(holling1.fit, holling2.fit, base = TRUE, nobs = 16)
 ```
-In this case, it doesn't change our results that much, but with smaller sample sizes the AICc metric becomes more and more conservative, so more complex models have to be _much_ better fits to make up for steep penalties for extra parameters. Note that AICc is not always appropriate, especially for non-linear models with non-normal errors. That is, it's probably not appropriate for our model! 
+In this case, it doesn't change our results that much, but with smaller sample sizes the $AIC$c metric becomes more and more conservative, so more complex models have to be _much_ better fits to make up for steep penalties for extra parameters. Note that $AIC$c is not always appropriate, especially for non-linear models with non-normal errors. That is, it's probably not appropriate for our model! In fact Richards' simulations suggest that the small sample size correction generally does not improve model selection, in terms of selecting the model with the lowest expected Kullback-Leibler distance (See Richards 2015 for more).
 
 Within a set of models, we can also calculate evidentiary _weights_ for each model, which sum to one. The weight,
 $$
 w_i = \exp \left( \frac{AIC_{min} - AIC_i}{2} \right)
 $$ 
-is the relative likelihood of model $i$. This is useful because you can sum up the weights for similar models or models that meet certain criteria (e.g., you could add up the weights of models that allowed parameter $b$ to vary) to establish their combined support among the models. 
+is the relative likelihood of model $i$. This is in theory useful because you can sum up the weights for similar models or models that meet certain criteria (e.g., you could add up the weights of models that allowed parameter $b$ to vary) to establish their combined support among the models. These are also used in model averaging of paramters, which won't address.
 
 Again, these values are easy to obtain by hand or with:
 ```{r}
 AICtab(holling1.fit, holling2.fit, base = TRUE, weights = TRUE)
 ```
-But also, again, these weights may not be appropriate for our models. Unfortunately, AIC-related metrics may not be the simple solution to all of our problems that many of us had hoped!
+But also, again, these weights may not be appropriate or useful. They are easy to calculate, but it is not really clear what they mean. Again, Richards (2015) suggests that they do not have any properties we would want them to have! When it comes to predicting or extrapolating, Richards would suggest just using the best model, assuming the factor(s) involved in it are well supported, and ignorning model averaging approaches.
+
+Unfortunately, $AIC$-related metrics may not be the simple solution to all of our problems that many of us had hoped! Rather we _still_ need to pay attention to what we're doing from start (selecting reasonable models) to comparing their reasonableness with AIC. All that said, however, AIC is very useful for comparing multiple models that are not necessarily nested and selecting a set of reasonable models.
 
 
 
