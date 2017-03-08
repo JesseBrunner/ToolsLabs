@@ -1,0 +1,336 @@
+---
+title: 'Lab 9: Model evaluation (including Goodness of fit)'
+author: "Jesse Brunner"
+date: '`r format(Sys.Date())`'
+output:
+  pdf_document:
+    toc: yes
+  html_document:
+    toc: yes
+---
+
+
+```{r, echo=FALSE}
+knitr::opts_chunk$set(fig.width = 4, fig.height = 3)
+```
+
+How well does our model perform?
+===========================
+
+We have seen how to fit models to data and compare their performance or test hypotheses with them. But we still need to assess whether our model is a reasonable one. (Note: we often evaluate our full model, the one with all of the bells and whistles that has the best shot at fitting our data reasonably well, even if this is not the one best supported by our data. This way we know we are comparing our other models to a reasonable one. In other cases, however, we may just want to evaluate our best-supported model to see how it does.) So what does model performance or a "reasonable" model mean? Well, we should look at multiple criteria.
+
+*  Is there more variation than expected if our model is "correct"? 
+   +  This is generally tested in the framework of a $\chi^2$ goodness of fit test (or really, a badness of fit test because a significant P-value suggests your model is bad). This can work for count data with a binomial error structure. If we have continuous data or error structures described by stochastic distributions with extra parameters (e.g., a variance term), then this no longer works. After all, if there is extra variation in the data, this is just explained by a larger variance term!  
+*  Is there systematic bias in the model predictions? 
+*  Is there important structure in the data that remains unexplained by the model?
+  +  These last two are often examined visually by plotting the observed data against the predicted values or by looking at the residuals. To get at structure, try plotting these points according to other variables of potential interest (e.g., sex, group, size, ...) to see if they are doing different things.
+*  Does it make any biological sense?
+  
+There are no hard-fast rules. Rather, you need to be aware of what you are looking for and what it means. After all, a reasonable model for one purpose may be awful for another.
+
+The Reed frog functional response example
+-------------------------------
+
+Let us return to the functional response of predators to Reed frog tadpoles: 
+```{r loaddata, warning=FALSE}
+# load packages and data
+library(tidyverse)
+library(bbmle)
+library(emdbook)
+data("ReedfrogFuncresp")
+reed <- ReedfrogFuncresp # I'm getting tired of typing this long name!
+```
+
+Now let us fit our three Holling models:
+```{r fitmodels, warning=FALSE}
+# fit the models to the data 
+holling1.fit <- mle2(Killed ~ dbinom(size=Initial, prob=a), 
+										 start=list(a = 10/20), 
+										 data=reed)
+holling1.fit
+
+holling2.fit <- mle2(Killed ~ dbinom(size=Initial, prob=a /(1+a*h*Initial)), 
+										 start=list(a = 10/20, h = 1/50), 
+										 data=reed)
+holling2.fit
+
+holling3.fit <- mle2(Killed ~ dbinom(size=Initial, prob=(a*Initial^(c-1)) /(1+a*h*Initial^c)), 
+										 start=list(a = 10/20, h = 1/50, c=1), 
+										 data=reed)
+holling3.fit
+
+AICtab(holling1.fit, holling2.fit, holling3.fit)
+```
+
+So we have fit our models and found little support for the type I, linear functional response, and a good deal of support for models that allow the functional response to saturate. And although the type III model is pretty close in $\Delta AIC$ to the type II model, if we followed Richards' rules (Ch. 3, Fox et al. 2015) we would not include this model in our final set because a) the simpler type II model is nested in the type III and b) the type II has a lower $AIC$ value. In other words, adding the extra parameter, $c$, of the type III model does not improve the fit much at all. (Or we could have used a LRT to get a similar result.)
+
+But still, we want to know, are we choosing among crappy models? Can even the model with three parameters ($a$, $h$, and $c$) fit our data? A common approach would be to use a $\chi^2$ test of the summed deviance of our observations from the predicted values: 
+```{r}
+reed$pred3 <- predict(holling3.fit) # generate predicted values for each obs.
+reed$dev <- with(reed, (Killed-pred3)^2/pred3) # calculate deviation from this prediction
+reed
+sum(reed$dev) # The chi-square test statistic of our GOF test
+dchisq(x=sum(reed$dev), df=nrow(reed)-1) # The p-value of this test.
+```
+So it looks like we should reject the hypothesis that our model, even the Holling type III, generated these data. That is, there is more variation than we would expect if our model was correct and our data were binomially distributed. So how to proceed?
+
+Well first things first. Maybe We should see if our models make biological sense and are providing seemingly reasonable results. Maybe we should look for systematic bias or something else we are missing. The best way to do this is plot our data and predictions.  
+```{r plot_preds}
+# our three deterministic models
+Holl1<-function(x, a){
+	a*x
+}
+Holl2<-function(x, a, h){
+	(a*x)/(1+(a*h*x))
+}
+Holl3<-function(x, a, h, c){
+	(a*x^c)/(1+(a*h*x^c))
+}
+
+# Plot the data and the predictions against these data.
+p <- ggplot(reed, aes(x=Initial, y=Killed)) + geom_point()
+p + stat_function(fun=Holl1, color="gray",
+				args=list(a=coef(holling1.fit)["a"])) +
+	stat_function(fun=Holl2, color="black",
+				args=list(a=coef(holling2.fit)["a"], 
+						h=coef(holling2.fit)["h"])) +
+	stat_function(fun=Holl3, linetype=3,
+				args=list(a=coef(holling3.fit)["a"], 
+						h=coef(holling3.fit)["h"], 
+						c=coef(holling3.fit)["c"]))
+```
+
+So it is a little hard to see, but the type II (solid) and type III (dotted) are more or less on top of each other and seem to describe the general trend in the data. The type I (grey) is missing the boat. But again, this is hard to see since it is a subtle curve and our data are a bit noisy. Let's plot these data differently.
+
+```{r plot obs_by_preds1}
+# obs by predicted for model I
+reed$pred1 <- predict(holling1.fit) # generate predicted values for each obs.
+
+ggplot(reed, aes(x=pred1, y=Killed)) + 
+	geom_point() + geom_smooth(method="lm") + geom_abline(linetype=3)
+```
+
+Here we have plotted the observed values (# Killed) against the number predicted by the Type I model. If our model were really good, every observed value would be very near its predicted value (i.e., lay along the 1:1 line we added with the `geom_abline`). Given our messy data, it can be hard to see the general trend without adding some smoothing line, like the linear regression line in blue. With it you can see that we are systematically under-predicting low values and over predicting high values. If you go back to the previous figure you can see this there, too, but I think this makes it easier to note. 
+
+We can also plot the residuals against the predictor variable (here, `Initial`) ore predicted value to see this deviation more clearly.
+```{r plot resids1}
+# residual plot
+ggplot(reed, aes(x=Initial, y=Killed-pred1)) + 
+	geom_point() + geom_smooth() + geom_smooth(method="lm") +
+	geom_hline(yintercept = 0)
+```
+
+Now how do these look for the type II model? Try it!
+```{r plot obs_by_preds2, echo=FALSE}
+# obs by predicted for model II
+reed$pred2 <- predict(holling2.fit) # generate predicted values for each obs.
+ggplot(reed, aes(x=pred2, y=Killed)) + 
+	geom_point() + geom_smooth(method="lm") + geom_abline(linetype=3)
+#resid plot
+ggplot(reed, aes(x=Initial, y=Killed-pred2)) + 
+	geom_point() + geom_smooth() + geom_smooth(method="lm") +
+	geom_hline(yintercept = 0)
+```
+
+
+So this type II model is, overall, doing a lot better job than the type I. We could also look for unexplained structure in our data if we had other information about the trials. Say, for instance, that every first trial at a given density used a male predator and the second trial used a female. (totally making this up!)
+
+```{r sexdata}
+# makeup sex data
+reed$sex <- c("Male", "Female")
+reed
+```
+
+```{r plot_obs_by_preds2b, echo=FALSE}
+ggplot(reed, aes(x=pred2, y=Killed, color=sex, fill=sex)) + 
+	geom_point() + geom_smooth(method="lm") + geom_abline(linetype=3)
+#resid plot
+ggplot(reed, aes(x=Initial, y=Killed-pred2, color=sex, fill=sex)) + 
+	geom_point() + geom_smooth() + geom_smooth(method="lm") +
+	geom_hline(yintercept = 0)
+```
+
+So if there were differences in predation rates between sexes, it seems minor. (And it's made up...)
+
+Okay, so if our model seems reasonable in terms of the biology and seems to provide a reasonable description of the trend in the number killed, what's wrong with it? Why does the $\chi^2$ GOF test reject our model? Well, remember, we have been assuming that all of the predators and prey are identical and so the only explanation for variation from trial to trial is random, binomial variation. But what if that wasn't the case? What if we saw more than binomial variation from trial to trial because _something_ differed a little. 
+
+We can account for variation in the predation rate in a given tank by letting the probability of being killed vary a little bit, according to a beta distribution. This gives us a beta-binomial error distribution. Let's fit that model.
+```{r fit_betabinomial, warning=FALSE}
+holling2.beta.fit <- mle2(Killed ~ dbetabinom(size=Initial, prob=a /(1+a*h*Initial), theta=theta), 
+										 start=list(a = 10/20, h = 1/50, theta=1), 
+										 data=reed)
+holling2.beta.fit
+AICtab(holling1.fit, holling2.fit, holling2.beta.fit, holling3.fit)
+```
+Wow! That is much better. 
+
+So what if we repeat the GOF test?
+```{r GOF2}
+# GOF for the type II binomial
+reed$pred2 <- predict(holling2.fit)
+reed$dev2 <- with(reed, (Killed-pred2)^2/pred2)
+
+sum(reed$dev2)
+dchisq(x=sum(reed$dev2), df=nrow(reed)-1)
+
+# GOF for the type II beta-binomial
+reed$pred2bb <- predict(holling2.beta.fit)
+reed$dev2bb <- with(reed, (Killed-pred2bb)^2/pred2bb)
+
+sum(reed$dev2bb)
+dchisq(x=sum(reed$dev2bb), df=nrow(reed)-1)
+```
+Hang on! It's the same! Why? Haven't we explain this extra binomial variation with the beta binomial? 
+
+Indeed, we have. But our $\chi^2$ test doesn't know that. It still has (essentially) the same predicted values and the same observed values. In other words, we've just demonstrated that the $\chi^2$ goodness of fit test does not work when we have a nuisance variable (here theta).
+
+We can see that the predictions are basically the same, even though we have a much better model fit.
+```{r plot_betabinom}
+p + stat_function(fun=Holl1, color="gray",
+				args=list(a=coef(holling1.fit)["a"])) +
+	stat_function(fun=Holl2, color="black",
+				args=list(a=coef(holling2.fit)["a"], h=coef(holling2.fit)["h"])) +
+	stat_function(fun=Holl3, linetype=3,
+				args=list(a=coef(holling3.fit)["a"], h=coef(holling3.fit)["h"], c=coef(holling3.fit)["c"])) + 
+	stat_function(fun=Holl2, color="red",
+				args=list(a=coef(holling2.beta.fit)["a"], h=coef(holling2.beta.fit)["h"]))
+```
+
+Comparing observed and predicted variation
+------------------------------------------
+
+The difference between the models is just in the amount of variation we can explain with the binomial and beta-binomial distributions. This can be hard to visualize, but let's give it a shot. What we want is a plot of the observed standard deviation in our data against the amount predicted by the fitted model (i.e., by either the binomial or beta-binomial). 
+
+So first we need to calculate the proportion actually killed and the standard deviation at each level of initial densities. I've added in the predicted value at each initial density, too. (Note that I take the mean of this not because the predicted value varies between each trial at a given initial density, but because we need to go from two rows per initial density to one.)
+```{r est_SD}
+# Estimate SD and other things
+temp <- reed %>% group_by(Initial) %>% 
+	summarise(Prop = sum(Killed)/sum(Initial), # observed proportion killed
+						SD = sd(Killed), # observed SD of killed
+						P = mean(pred2/Initial) # predicted proportion killed
+	)
+```
+Then we want to add in the predicted SD for both distributions. These come from the theory of the distributions.
+$$
+SD_{binomial} = \sqrt{N p(1-p)} \\
+SD_{beta-binomial} = \sqrt{N p(1-p)}\times\left(1+ \frac{N-1}{\theta +1} \right)
+$$
+The parenthetical stuff on in the second equation is the variance inflation factor, which is a function of $\theta$, which we had to estimate with likelihood.
+
+```{r calc_Pred_SDs}
+# add in columns for predicted SD for two distributions
+(theta <- coef(holling2.beta.fit)["theta"])
+temp <- temp %>% 
+	mutate(
+		SD_binom = sqrt(Initial*P*(1-P)), # predicted SD from binomial
+		SD_betabinom = sqrt(Initial*P*(1-P)*(1+(Initial-1)/(theta+1))) # SD from betabinom
+	)
+```
+We can then plot the observed SD against that predicted by the binomial distribution.
+```{r plot_SD_binom}
+# Plot of observed SD against predicted SD of binomial
+ggplot(temp, aes(x=SD_binom, y=SD)) + 
+	geom_point() + geom_abline() + 
+	geom_smooth(method = "lm")
+```
+
+We can see that while we're pretty close at low values of the predicted standard deviation, we are definitely under-predicting the standard deviation at high values. Compare the linear regression line to the 1:1 line. This is where our binomial model is failing. But what about the beta-binomial? 
+```{r plot_SD_betabinom}
+# Plot of observed SD against predicted SD of betabinomial
+ggplot(temp, aes(x=SD_betabinom, y=SD)) + 
+	geom_point() + geom_abline() + 
+	geom_smooth(method = "lm")
+```
+
+The beta-binomial generally does a much better job of predicting the observed standard deviation (although there is one pesky point far above what we predict). This is what we'd expect since the beta binomial has an extra parameter, $\theta$, that allows the model to fit this greater standard deviation in our data. 
+
+If you have read through Richard's chapter in Fox et al. 2015 (Ch. 3), you would have seen a similar sort of plot looking at observed and predicted SD against the predicted probability of success (e.g., $P(Killed)$ here). The difference is that in his example he had a constant $N_i$, but in our example, $N_i$ varies with the treatment (well, it _is_ the treatment). Since the standard deviation varies with $N$, we cannot make such a simple plot. But here's an attempt where the black line is the standard deviation predicted by the binomial distribution and the red is for the beta-binomial. You can (again) see that the beta-binomial is capturing the larger variation we see.  
+```{r RichardsFig}
+# Sort of like Fig. 3.4 (p.64) of Fox et al. 2015, but our sample size (available) changes
+ggplot(temp, aes(x=Prop, y=SD)) + geom_point() + 
+	geom_line(aes(x=P, y=sqrt(Initial*P*(1-P)) )) +
+	geom_line(aes(x=P, y=sqrt(Initial*P*(1-P)*(1+(Initial-1)/(theta+1))) ), color="red") 
+```
+
+So in summary, we seem to have a pretty good model in the Holling type II, but need to account for extra binomial variation, which we might reasonably attribute to variation in predators or something else about the different trial. 
+
+The myxomatosis example (in progress)
+-----------------------
+
+Let's work through this again with a different example, where the response variable is continuous. 
+```{r myxo}
+library(emdbook)
+data(MyxoTiter_sum) 
+ggplot(MyxoTiter_sum, aes(x=day, y=titer)) + 
+	geom_point() + 
+	facet_wrap(~ grade) + geom_smooth()
+```
+
+For simplicity, let us restrict ourselves to the titer=4 subset of data:
+```{r subsetMyxo}
+myxo <- MyxoTiter_sum %>% filter(grade==4)
+```
+and fit the Michaelis-Menton model ($=\frac{ax}{b+x}$ to it:
+```{r Myxo_MM, warning=FALSE}
+MM.fit <- mle2(titer ~ dgamma(shape=((a*day/(b+day))/scale), scale=scale),
+							 start=list(scale=1, a=8, b=2),
+							 data=myxo)
+```
+
+Now, is it reasonable? Again, a good place to start is to plot the model predictions over the data.
+```{r Myxo_plotModel}
+MM <- function(x,a,b) {a*x/(b+x)}
+
+ggplot(myxo, aes(x=day,y=titer)) + 
+	geom_point() + 
+	stat_function(fun=MM, args=list(a=coef(MM.fit)["a"], b=coef(MM.fit)["b"]))
+```
+
+And we can plot our observed against the predicted values or residual plots:
+```{r Myxo_ObsPred}
+myxo$pred <- predict(MM.fit)
+# observed vs. predicted
+ggplot(myxo, aes(x=pred,y=titer)) + 
+	geom_point() + 
+	geom_abline() +
+	geom_smooth(linetype=2) + geom_smooth(method="lm")
+```
+
+So the MM model does a reasonable job, it seems, although it seems to over-predict values at the highest values. 
+```{r Myxo_residPlot}
+# residual plot
+ggplot(myxo, aes(x=day, y=titer-pred)) + 
+	geom_point() + geom_smooth(linetype=2) + geom_smooth(method="lm") +
+	geom_hline(yintercept = 0)
+```
+
+In this residual plot is becoming clearer that this model under-predicts early or early to mid values and over-predicts later values. This might suggest that myxomavirus titers decline a bit with time. Maybe one should look at the Ricker model again...
+
+But what about the variability? What do we expect to see? Well, we can compare the expected variance or standard deviation with what we actually observed. You will recall that the variance of the Gamma distribution ($=a s^2$) is a function of the mean ($=a s$). Therefore we cannot compare the distribution of our entire data set with the expected distribution; the distribution _changes_ with the expected values. Instead, we need to compare the distributions day by day (or we could come up with bins of a couple days, assuming that they had roughly the same predicted value).
+
+```{r}
+# Estimate SD and other things
+temp2 <- myxo %>% group_by(day) %>% 
+	summarise(SD = sd(titer), # observed SD of titer
+						Pred = mean(pred) # predicted titer
+	)
+# add in the expected SD
+Scale <- coef(MM.fit)["scale"]
+temp2 <- temp2 %>% 
+	mutate(Var = Pred*Scale,
+				 SD_pred = sqrt(Var))
+
+# plot observed SD against predicted SD
+ggplot(temp2, aes(x=SD_pred, y=SD)) + 
+	geom_point() + 
+	geom_abline() +
+	geom_smooth(linetype=2) + geom_smooth(method="lm")
+```
+
+Man, that is ugly! But what is it telling us? Well, first off notice that there is fairly little variation in `SD_pred`. This is because our predicted titers aren't varying _that_ much (especially once we take the square-root of them). There is a fair bit of variation in the observed standard deviation, though. That explains the general shape of the plot. But we also see that we are under-predicting the standard deviation at the low end and over-predicting the standard deviation at the high end. Why is this? Well, it it probably because the MM line is fairly missing the declining titers through time (see the plot of our predictions overlaid on the data, above). Since the line cannot go down, the variance must increase to account for these observations. In other words, because the variance (and standard deviation) is tied to the mean, our findings of systematic bias in the deterministic part of the model and the stochastic distribution are telling us the same thing: our model is missing out on the decline in titers over time.
+
+
+Homework
+========
+
+Do it with your own stuff.
