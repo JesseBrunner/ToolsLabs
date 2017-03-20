@@ -1,0 +1,69 @@
+---
+title: "Mixtures & Overdispersion"
+author: "Jesse Brunner"
+date: "3/20/2017"
+output:
+  ioslides_presentation: default
+  beamer_presentation: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+## What is overdispersion?
+
+Greater variability (dispersion) that expected by a particular stochastic distribution.
+
+_Example:_   
+$y_i \sim Bin( n_i, p_i)$
+
+The data are over-dispersed if:  
+**Observed variance > Expected variance of binomial**
+
+$\sum p_i (y_i-n_i p_i)^2 > \sum n_i p_i(1 - p_i)$),   
+where $n_i p_i$ is the expected number off success in group $i$. 
+
+
+In other words, our data are over-dispersed if there is a **large discrepancy between the observed and expected responses**.  
+
+Especially common with discrete data (Binomial, Poisson), but can also occur with continuous data where we have an a priori expectation of the variance.
+
+## What causes overdispersion?
+
+- Badly fit model 
+    -  missing something important in biology
+        -  missing biological process
+        -  unobserved groups (individuals within group likely correlated) 
+    -  wrong functional form (deterministic model)
+-  missing something important in data collection
+    -  aggregated data (compounding different distributions)
+    -  some added error in counting
+-  outliers 
+
+## How to detect overdispersion?
+
+- $\chi^2$ Goodness of fit tests
+- Compare variance with theoretical expectation 
+      +  $\sum n_i p_i(1 - p_i)$ for Binomial 
+      +  $variance = mean = \lambda$ for Poisson model (Note, $var/mean = 1$ is a common, but not very nuanced test)
+- Plot residuals, etc.
+
+
+## What to do about it?
+
+- Try to **find a better model** (what's missing?)
+- Try to **incorporate group structure** (specifically or as a mixture of groups)
+     +  allow parameters in model to vary by measured group, sex, age, etc.
+     +  allow parameters to vary among groups randomly (i.e., hierarchical or mixed models)
+
+
+## What to do about it?
+
+- Try to **include the separate sources of variation in data collection process** (two step model)
+     +  Process leads to some True underlying distribution (e.g., Poisson-distributed distribution of seeds), but data collection may have biases or add to variation (e.g., actual counts of seeds may be binomially distributed with imperfect detection)
+     +  compound distribution, e.g., 
+         - Poisson where rate parameter, $\lambda$, is Gamma distributed yields a negative binomial
+         - Binomial where probability, $p$, is Beta distributed yields a beta-binomial
+-  Use a distribution with an **estimated variance** (nuisance variable)
+
