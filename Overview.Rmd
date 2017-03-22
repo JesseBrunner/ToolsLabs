@@ -2,7 +2,9 @@
 title: "Tools of the Ecological Detective"
 author: "Jesse Brunner"
 date: "1/10/2017"
-output: beamer_presentation
+output:
+  ioslides_presentation: default
+  beamer_presentation: default
 ---
 
 ```{r setup, include=FALSE}

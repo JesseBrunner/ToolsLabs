@@ -1,0 +1,254 @@
+---
+title: 'Lab 10: Dealing with overdispersion'
+author: "Jesse Brunner"
+date: '`r format(Sys.Date())`'
+output:
+  pdf_document:
+    toc: yes
+  html_document:
+    toc: yes
+---
+
+A refresher goodness of fit tests for overdispersion: Reed frogs again
+----------------------------------------------------------
+
+In the previous lab on model evaluation (i.e., Goodness of fit), we saw that the Holling type II deterministic model _seemed_ to fit the Reed frog functional response data fairly well...
+```{r loadRF data, warning=FALSE, message=FALSE}
+# load packages and data
+library(tidyverse)
+library(bbmle)
+library(emdbook)
+data("ReedfrogFuncresp")
+reed <- ReedfrogFuncresp # I'm getting tired of typing this long name!
+```
+
+```{r RF_Fit, warning=FALSE}
+# Fit the model
+holling2.fit <- mle2(Killed ~ dbinom(size=Initial, prob=a /(1+a*h*Initial)), 
+										 start=list(a = 10/20, h = 1/50), 
+										 data=reed)
+holling2.fit
+
+# Plot the model predictions against the data
+Holl2<-function(x, a, h){
+	(a*x)/(1+(a*h*x))
+}
+
+p <- ggplot(reed, aes(x=Initial, y=Killed)) + geom_point()
+p + stat_function(fun=Holl2,
+				args=list(a=coef(holling2.fit)["a"], 
+						h=coef(holling2.fit)["h"]))
+```
+
+But when we used a $\chi^2$ goodness of fit test, there was a significant lack of fit.
+```{r RF_GOF}
+reed$pred2 <- predict(holling2.fit) # generate predicted values for each obs.
+reed$dev <- with(reed, (Killed-pred2)^2/pred2) # calculate deviation from this prediction
+reed
+sum(reed$dev) # The chi-square test statistic of our GOF test
+dchisq(x=sum(reed$dev), df=nrow(reed)-1) # The p-value of this test.
+```
+Let me remind you that this goodness of fit test is a test of overdispersion. We observed more variation (`dev`) than we would expect by chance if our model (type II functional response with binomially-distributed errors) was correct (which we theoretically expect to follow a $\chi^2$ distribution). There were also some plots of observed and expected variation against predicted values, which were also informative.
+
+You will recall that we determined that the lack of fit was not due to our model missing anything obvious, biologically (though it could have), but rather because the assumption that our data were binomially distributed was flawed. The binomial model assumed that all of the predators were functionially identical, with the same exact predation rate, and so were the prey. Thus it assumes that the only reason we observe variation from trial to trial is stochastic, binomial variation. 
+
+However we saw that there was more variation than would be expected if all the predators were identical, etc.. In other words, it sure seems that maybe predators vary a bit in their search or handling efficiency, or maybe some prey were clever than others. We probably cannot model these differences explicitly, but we can account for this trial-to-trial variation by letting the probability of success (=being killed) vary a bit among trials around the overall expectation of the Holling type II model. Specifically, we let the probability of success in replicate $j$ of treatment level $i$ vary, such that $p_{ij} \sim Beta(\bar{p}_i, \theta)$, where $\bar{p}_i$ is the mean probability of success in treatment level $i$. 
+
+This model with a beta-binomial error distribution was a much better fit to our data
+```{r fit_betabinomial, warning=FALSE}
+holling2.beta.fit <- mle2(Killed ~ dbetabinom(size=Initial, prob=a /(1+a*h*Initial), theta=theta), 
+										 start=list(a = 10/20, h = 1/50, theta=1), 
+										 data=reed)
+holling2.beta.fit
+AICtab(holling2.fit, holling2.beta.fit) # AIC table
+anova(holling2.fit, holling2.beta.fit) # LRT
+```
+
+In summary, we found evidence of overdispersion---greater variation than we would have expected if both our deterministic and stochastic models were correct. With a little thought about what our binomially, stochastic distribution was assuming, we were able to modify this to account for a lot more variation and produced a better-fitting model and perhaps a little bit of insight into the biology of the system.
+
+```{r plot_betaBinom}
+# Plot of the probability of x kills at highest prey density, given 
+# betabinomial distribution, black bars
+# binomial distribution, red line
+ggplot(data.frame(x=c(0,100)), aes(x=x)) + 
+	stat_function(fun=dbetabinom, geom="bar",
+								args=list(prob=0.2805014, size=100, theta=coef(holling2.beta.fit)["theta"])) +
+	stat_function(fun=dbinom, args=list(prob=0.2805014, size=100), color="red") + 
+	labs(x="Number of prey killed", y="Probability")
+```
+
+
+The goal in the rest of this lab is to give you some practice thinking about and dealing with different sources of overdispersion. For simplicity, and because of their common use, we will focus on examples where a Poisson distribution is being used to describe what is thought to be a random process. And as a motivating example, imagine that we are interested in describing the tick burden on chipmunks.
+
+Poisson (random) accumulation of ticks where the rate, $\lambda$, varies by sex
+--------------------------------------------------------------------
+So that we know precisely the processes that produce our data, let us simulate a data set where 100 chipmunks are captured and their tick burdens counted, imperfectly. Half are males and the other half females. For many reasons, males often have higher parasite burdens than females, and we will simulate things this way. 
+```{r Sex_simData}
+# simulate our data set
+set.seed(101) # arbitrary seed
+
+df1 <- data.frame(Chippie = 1:100, Sex = rep(c("M","F"), each=50))
+df1$Ticks <- c(rpois(n=50, lambda=7), # burdens on males
+							 rpois(n=50, lambda=4)) # burdens on females
+ggplot(df1, aes(x=Ticks)) + stat_count()
+```
+
+Notice that we have simulated burdens where males have, on average, 3 more ticks than females. This may not seem like much, but it a >75% larger burden. Still, the data _look_ like they might reasonably come from a single distribution. 
+
+Now let us fit a simple model with a single parameter, $\lambda$, which is the average tick burden. We might be interested in this, as well as the question of whether there is evidence of aggregation. That is, does it seem like some individuals have more (or fewer) ticks than we would expect if the accumulation of ticks were actually random? (See, overdispersion can be an interesting question in and of itself!)
+```{r Sex_model}
+pois1 <- mle2(Ticks ~ dpois(lambda=lambda), start=list(lambda=3), data=df1)
+summary(pois1)
+```
+We get a reasonable answer and no signs that anything is amiss. _Yet_.
+
+Let us plot the expected distribution of ticks _over_ the actual distribution. 
+```{r Sex_Distr}
+ggplot(df1, aes(x=Ticks)) + 
+	stat_count(aes(y=..prop..)) + 
+	stat_function(fun=dpois, args=list(lambda=coef(pois1)["lambda"]), 
+								color="red", geom="point",
+								xlim=c(0,max(df1$Ticks)), n=max(df1$Ticks)+1)
+```
+
+This takes a bit more futzing and thus explanation than usual. 
+
+First, we want to use `stat_count` to count the number of observations at each x-value. (Why not use a histogram? Well, histograms divide the x-axis into "bins" of arbitrary size, but here we really want them to correspond to particular numbers of ticks.)  
+
+Second, we tell `stat_count` that we want it to plot the proportion of observation, `prop`, rather than the actual count. Both are computed by `stat_count`, but we can specify which of these internal values with the double periods on each side. I know, super obvious, right? 
+
+Lastly, we want to plot the expected values from the poisson with $\lambda = `r coef(pois1)["lambda"]`$, but here again are a couple of issues. First, our distribution of tick counts may not extent do zero, but we would probably like to see the x-axis go down to zero and up to the maximum number of ticks. Hence the `xlim=...` stuff. More importantly, the Poisson distribution is only defined for integer values of x, but `stat_function` automatically evaluates the function at `n=101` points along the x-axis. We thus need to provide the right number of points so that each falls on an integer. 
+
+Right. So what does this figure show us? Well, it sort of looks like our data _might_ not fit the theoretical expectation very well. But is this a big difference? 
+
+Let me start with a $\chi^2$ test, which we already know. It will take a few steps because we need to get our counts in order and ensure bins with expected values ≥5.
+```{r Sex_ChiSq}
+# Summarize number of chippies with observed numbers of ticks 
+tab <- df1 %>% group_by(Ticks) %>% 
+	summarise(Observed=n()) %>% 
+	# add in the expected number of ticks
+	mutate(Expected=100*dpois(x=Ticks,lambda=coef(pois1)["lambda"])) #Note we must multiply by 100 to get counts
+tab
+# Now we actually need to modify this a bit, since 
+# a) we do not see all of the values of tick burdens (e.g., > 13)
+# b) the the expected values should be > 5
+
+# First, let us modify the last entry to be the expected number with 12 or greater
+tab$Expected[tab$Ticks==12] <- 100*(1-ppois(q=11, lambda=coef(pois1)["lambda"]))
+
+# We will use a trick to use dplyr's group_by function to do the heavy lifting for us
+tab$bin <- tab$Ticks        # new column that we will group by
+tab$bin[1:3] <- "<=2"     # first three rows are less than or equal to 2
+tab$bin[11:13] <- ">=10"  # last three rows aer greater than or equal to 10
+tab
+# re-group and sum up counts and expected values
+tab2 <- tab %>% group_by(bin) %>% 
+	summarise(Observed = sum(Observed),
+						Expected = sum(Expected))
+
+# NOW, calculate Chi-square stats
+tab2$Chi <- with(tab2, (Observed-Expected)^2/Expected)
+
+sum(tab2$Chi) # Chi-square test value
+pchisq(q=sum(tab2$Chi), df=nrow(tab2)-1, lower.tail=FALSE) # p-value
+```
+Hmm... we _know_ that we have two groups and should have greater variation than expected, but still, we do not detect a significant lack of fit with a $\chi^2$ test. You could examine the `Chi` column to see at which values of `Ticks` the observed and expected deviate...perhaps there is systematic bias. But no. I don't see it. Lastly, we could looki at the variance/mean ratio:
+```{r}
+var(df1$Ticks)/mean(df1$Ticks)
+```
+We are really pretty close to the expected case of 1. In other words, we do not seem to have a problem with overdispersion in our data set, even though we know it should be there! 
+
+Does this mean that there isn't an effect? Maybe we did a poor job simulating our data. Let's just plot the tick burdens by sex, then, to see.
+```{r Sex_hist}
+ggplot(df1, aes(x=Ticks)) + stat_count() + facet_grid(Sex ~. )
+```
+
+Does this _look_ like a real difference, a potentially important difference in tick burdens to you? Now let's update our model to allow $\lambda$ to vary by sex.
+```{r Sex_SexModel}
+pois2 <- mle2(Ticks ~ dpois(lambda=lambda), start=list(lambda=3), data=df1,
+							parameters = list(lambda ~ Sex-1)) # notice the -1 to remove intercept
+summary(pois2)
+
+AICtab(pois1, pois2)
+```
+So to recap: we made up data where there were reasonably large differences in the average burden ($\lambda_{male}>\lambda_{female}$), yet we did not really see any evidence of overdispersion when we ignored sex. But if we look at burdens by sex or fit a model that allows $\lambda$ to vary by sex, we do see that there is strong evidence for males having somewhat larger burdens than females. I think this makes important point: **while overdispersion can signal that your model is missing something, a lack of overdispersion does not mean that your model is spot on!**
+
+Poisson (random) accumulation of ticks where $\lambda$ is gamma distributed: the negative binomial
+------------------------------------------------------------------------------------------
+
+Let us simulate a new data set with 100 mice, all the same sex, but of varying masses. We will make the rate of tick accumulation, $\lambda$, increase with the mass of the chippie, such that $\lambda_i = b_0 + b_1 \text{mass}_i$. Moreover, we will allow this rate to vary from chippie to chippie of the same size. Specifically, we will let $\lambda_{ij} \sim Gamma(\text{shape}=\text{shape}, \text{ scale}=\text{mean}_i/\text{shape})$.
+
+```{r}
+set.seed(1234)
+df2 <- data.frame(Chippie=1:100,
+									Mass = rnorm(100, mean=25, sd=5))
+# Underlying True relationship b/w lambda and mass
+df2$Det_lambda <- 10 + (df2$Mass-25)*0.75 
+# the individual level value of lambda for each chippie
+df2$lambda <- rgamma(n=100, shape=1, scale=df2$Det_lambda/1)
+
+# Given this lambda, the Poisson-distributed tick burdens
+df2$Ticks <- rpois(n=100, lambda = df2$lambda)
+
+summary(df2)
+```
+
+
+```{r}
+ggplot(df2, aes(x=Mass, y=Ticks)) + geom_point() + geom_smooth(method="lm")
+```
+
+So there seems to be a pretty clear increase in tick burdens with mass. (Phew! Didn't screw that up!) Let's fit a model to this.
+
+```{r}
+median(df2$Mass)
+mass_pois <- mle2(Ticks ~ dpois(lambda=pmax(b0 + b1*(Mass-23), 0) ), 
+									start=list(b0=10, b1=0.5), 
+									data=df2)
+mass_pois
+```
+
+Note: I am centering the model on the mean mass. This makes it easier to intepret the intercept (i.e., the predicted burden for a mouse with a mass of 23 g is `r round(coef(mass_pois)["b0"], 2)` ticks). Centering like this can also make it easier to refit the model when you add in new predictors (e.g., sex, age), as well as compare their effects. Notice that I wrapped up the whole determinsitic model inside a `pmax()` function. This goes row by row and returns the maximum of the predicted value from the deterministic model or zero. This keeps our simple model from giving negative estimates of $\lambda$.
+
+So is this a reasonable model? Is there evidence of overdispersion? We could use a goodness of fit test, but we'd have to bin together animals of similar size and add them up and it would get both complicated and hard to meet the assumptions of the $\chi^2$ test. Instead, we might just look at the variance to mean ratio.
+```{r}
+var(df2$Ticks)/mean(df2$Ticks)
+```
+Whoo boy! That's big. It's certainly a sign that things are off from what we'd expect with a Poisson distribution. Rember that the variance should increase directly with the mean (and thus with mass in this data set), so we might also look at how the variance changes with the mean. We can see this in a residual plot.
+```{r}
+df2$preds <- predict(mass_pois)
+ggplot(df2, aes(x=Mass, y=Ticks-preds)) + geom_point() + geom_smooth()
+```
+
+Or we could calculate it. But in any case, it's pretty clear that we have more variation than we'd expect from a simple Poisson process. 
+
+```{r}
+mass_nb <- mle2(Ticks ~ dnbinom(mu=pmax(b0 + b1*(Mass-23), 0), size=size), 
+									start=list(b0=10, b1=0.5, size=5), 
+									data=df2)
+mass_nb
+
+AICtab(mass_pois, mass_nb)
+```
+
+Notice that the "size" parameter of the negative binomial model is about the same value as the "shape" parameter of the Gamma distribution. This is not a coincidence. The shape parameter ends up being the size or "dispersion" parameter in a Poisson-Gamma mixture model, like we just created. And this dispersion parameter, often called $k$ in the ecological (or at least parasitology literature), is an inverse measure of aggregation; smaller values mean more aggregation or overdispersion. We can see this in the variance term of the negative binomial (at least in the ecological parameterization):
+$$\sigma^2 = \mu + \frac{\mu^2}{k},$$
+where $\mu$ is the mean of the distribution. As you can see, as $k$ gets large, the negative binomial convgerges on the Poisson (i.e., $\sigma^2 \approx \mu$). So our estimate of $k$ = size = `round(coef(mass_nb)["size"],2)` suggests a great deal of aggregation of ticks on hosts. 
+```{r}
+ggplot(df2, aes(x=Ticks)) + stat_count()
+```
+
+
+
+Zero-inflated Poisson
+---------------------
+
+
+
+
+
+
+
+
+
+
