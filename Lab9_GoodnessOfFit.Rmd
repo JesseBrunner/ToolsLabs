@@ -70,9 +70,12 @@ reed$pred3 <- predict(holling3.fit) # generate predicted values for each obs.
 reed$dev <- with(reed, (Killed-pred3)^2/pred3) # calculate deviation from this prediction
 reed
 sum(reed$dev) # The chi-square test statistic of our GOF test
+pchisq(q=sum(reed$dev2), df=nrow(reed)-1, lower.tail=FALSE) # The p-value of this test.
+pchisq(q=sum(reed$dev2), df=nrow(reed)/2-1, lower.tail=FALSE) # The p-value of this test.
+
 dchisq(x=sum(reed$dev), df=nrow(reed)-1) # The p-value of this test.
 ```
-So it looks like we should reject the hypothesis that our model, even the Holling type III, generated these data. That is, there is more variation than we would expect if our model was correct and our data were binomially distributed. So how to proceed?
+So it looks like we should reject the hypothesis that our model [NEED TO FIX/CHECK], even the Holling type III, generated these data. That is, there is more variation than we would expect if our model was correct and our data were binomially distributed. So how to proceed?
 
 Well first things first. Maybe We should see if our models make biological sense and are providing seemingly reasonable results. Maybe we should look for systematic bias or something else we are missing. The best way to do this is plot our data and predictions.  
 ```{r plot_preds}
@@ -178,7 +181,7 @@ reed$pred2bb <- predict(holling2.beta.fit)
 reed$dev2bb <- with(reed, (Killed-pred2bb)^2/pred2bb)
 
 sum(reed$dev2bb)
-dchisq(x=sum(reed$dev2bb), df=nrow(reed)-1)
+pchisq(q=sum(reed$dev2bb), df=nrow(reed)-1, lower.tail=FALSE)
 ```
 Hang on! It's the same! Why? Haven't we explain this extra binomial variation with the beta binomial? 
 

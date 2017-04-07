@@ -3,11 +3,16 @@ title: 'Lab 10: Dealing with overdispersion'
 author: "Jesse Brunner"
 date: '`r format(Sys.Date())`'
 output:
-  pdf_document:
-    toc: yes
   html_document:
     toc: yes
+  pdf_document:
+    toc: yes
 ---
+
+
+```{r, echo=FALSE}
+knitr::opts_chunk$set(fig.width = 4, fig.height = 3)
+```
 
 A refresher goodness of fit tests for overdispersion: Reed frogs again
 ----------------------------------------------------------
@@ -72,8 +77,9 @@ In summary, we found evidence of overdispersion---greater variation than we woul
 # binomial distribution, red line
 ggplot(data.frame(x=c(0,100)), aes(x=x)) + 
 	stat_function(fun=dbetabinom, geom="bar",
-								args=list(prob=0.2805014, size=100, theta=coef(holling2.beta.fit)["theta"])) +
-	stat_function(fun=dbinom, args=list(prob=0.2805014, size=100), color="red") + 
+								args=list(prob=0.2805014, size=100, color="red",
+													theta=coef(holling2.beta.fit)["theta"])) +
+	stat_function(fun=dbinom, args=list(prob=0.2805014, size=100)) + 
 	labs(x="Number of prey killed", y="Probability")
 ```
 
@@ -121,13 +127,14 @@ Lastly, we want to plot the expected values from the poisson with $\lambda = `r 
 
 Right. So what does this figure show us? Well, it sort of looks like our data _might_ not fit the theoretical expectation very well. But is this a big difference? 
 
-Let me start with a $\chi^2$ test, which we already know. It will take a few steps because we need to get our counts in order and ensure bins with expected values ≥5.
+Let me start with a $\chi^2$ test, which we already know. It will take a few steps because we need to get our counts in order and ensure bins with expected values >=5.
 ```{r Sex_ChiSq}
 # Summarize number of chippies with observed numbers of ticks 
 tab <- df1 %>% group_by(Ticks) %>% 
 	summarise(Observed=n()) %>% 
 	# add in the expected number of ticks
-	mutate(Expected=100*dpois(x=Ticks,lambda=coef(pois1)["lambda"])) #Note we must multiply by 100 to get counts
+	#Note we must multiply by 100 to get counts
+	mutate(Expected=100*dpois(x=Ticks,lambda=coef(pois1)["lambda"])) 
 tab
 # Now we actually need to modify this a bit, since 
 # a) we do not see all of the values of tick burdens (e.g., > 13)
@@ -234,21 +241,55 @@ AICtab(mass_pois, mass_nb)
 Notice that the "size" parameter of the negative binomial model is about the same value as the "shape" parameter of the Gamma distribution. This is not a coincidence. The shape parameter ends up being the size or "dispersion" parameter in a Poisson-Gamma mixture model, like we just created. And this dispersion parameter, often called $k$ in the ecological (or at least parasitology literature), is an inverse measure of aggregation; smaller values mean more aggregation or overdispersion. We can see this in the variance term of the negative binomial (at least in the ecological parameterization):
 $$\sigma^2 = \mu + \frac{\mu^2}{k},$$
 where $\mu$ is the mean of the distribution. As you can see, as $k$ gets large, the negative binomial convgerges on the Poisson (i.e., $\sigma^2 \approx \mu$). So our estimate of $k$ = size = `round(coef(mass_nb)["size"],2)` suggests a great deal of aggregation of ticks on hosts. 
+We can simply plot a histogram of our data to see this overdispersion...
 ```{r}
-ggplot(df2, aes(x=Ticks)) + stat_count()
+ggplot(df2, aes(x=Ticks)) + stat_count(aes(y=..prop..)) +
+	stat_function(fun=dnbinom, n=max(df2$Ticks)+1,
+								args=list(mu=coef(mass_nb)["b0"]+coef(mass_nb)["b1"]*25, 
+													size=coef(mass_nb)["size"])) + 
+	stat_function(fun=dpois, n=max(df2$Ticks)+1, color="red",
+								args=list(lambda=coef(mass_pois)["b0"]+coef(mass_pois)["b1"]*25))
 ```
 
-
+and overlay the predicted distributions from the negative binomial (black) and Poisson (red). You can see how off the Poisson is, but even the NB does not look very close to our data. But think about what is wrong with this figure. Should we be lumping together tick burdens from animals of all sizes? What if we plotted our histograms and distributions on smaller subsets of the data (e.g., <20, 20--<25, 25--<30, >=30)? I will have to leave that exercise to you. (Hint: you won't be able to use `stat_function` to produced different predicted values for various groups [e.g., on different facets]. Rather  you will want to create a new data frame with columns of your grouping variable, the range of tick burdens, and the predicted probabilities of observing those tick burdens. Then you can simply add a `geom_` with this new data frame.)
 
 Zero-inflated Poisson
 ---------------------
 
+Imagine that ticks are some places and not others. When they occur, then mice can pick them up, but if they are not present, then tick burdens should be zero. This sort of scenario should produce a zero-inflated data set of tick burdens. While both the probability of occurence and the burden given ticks present could be functions of some measured variables (e.g., local relative humidity, forest cover, etc.) for simplicity I will just make these constants.
+```{r}
+set.seed(321)
+df3 <- data.frame(Chippie = 1:100, 
+									Ticks = rbinom(n=100, prob=0.7, size=1) * # 0 if ticks absent, 1 if present
+										rpois(n=100, lambda=3)) # tick burdens  
+```
+
+You might run the two distribution functions separately to see what they produce on their own, then combine them to see their product. In any case, we end up with a lot of zeros, a lot more than we would expect from Poisson distribution.
+```{r}
+ggplot(df3, aes(x=Ticks)) + stat_count(aes(y=..prop..)) + 
+	stat_function(fun=dpois, args=list(lambda=mean(df3$Ticks)), n=max(df3$Ticks)+1)
+```
+
+What's more, we do not know how many zeros are from the absences of ticks and how many are zeros from a Poisson giving zeros. We can model this two-part process, though, pretty easily.
+```{r}
+# zero inflated poisson RUNNING OUT OF TIME, BUT x would be Tick burden & z is prob absence
+dzipois<-function(x,z,lambda,log=FALSE){
+	if(log==FALSE){
+		ifelse(x==0,z+(1-z)*dpois(x,lambda),(1-z)*dpois(x,lambda))
+		}
+	else{
+		ifelse(x==0,log(z+(1-z)*dpois(x,lambda)),log((1-z)*dpois(x,lambda)))
+		}
+	}
 
 
+zip <- mle2(Ticks ~ dzipois(lambda = lambda, z=z), 
+						start=list(lambda=1, z=0.5),
+						data=df3)
 
+summary(zip)
+```
 
-
-
-
+So if you can follow this, we recovered the probability of ticks being present (=$1-z$=`r 1- round(coef(zip)["z"])`) and have a solid estimate of $\lambda$. I will leave it to you to plot this expectation vs. our data, and find some other way to show whether it is a better-fitting model than one that does not account for the zero inflation. You might also try fitting a negative binomial model to see if that one works OK in this situation, too.
 
 

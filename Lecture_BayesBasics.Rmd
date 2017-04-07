@@ -1,0 +1,182 @@
+---
+title: "The basics of Bayes(ian)"
+author: "Jesse Brunner"
+date: '`r format(Sys.Date())`'
+output: beamer_presentation
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, fig.width = 5, fig.height = 3)
+library(ggplot2)
+```
+
+## Bayes theorem
+
+$$ 
+\begin{aligned}
+\text{Pr}(H_i \mid D) &=  \frac{\text{Pr}(D \mid H_i) \times \text{Pr}(H_i)}{\text{Pr}(D)}  \\
+ \\
+\text{Posterior} &=  \frac{\text{Likelihood} \times \text{Prior}}{\text{Pr}(D)} 
+\end{aligned}
+$$
+
+So your posterior probability (belief in $H_i$) is a product of the likelihood (same old likelihood) and the prior probability (prior belief in $H_i$)
+
+Most of the time we are interested in $H_i: \theta=$ some particular value(s). But it can represent discrete hypotheses, too.
+
+A binomial example:
+==================
+
+We wish to know the probability that the sex ratio is 50:50, given an observation of 12 males and 8 females.
+
+We know the likelihood of getting 12 males (=successes) given $p=0.5$ is:
+$$
+\mathcal{L}(12\text{ of }20 \mid p=0.5) = \binom{20}{12}p^{12}(1-p)^8=`r dbinom(12,20,0.5)`,
+$$
+and the MLE is at $p=12/20=0.6$. But, still, what is the probability that $p=0.5$?
+
+A binomial example:
+==================
+
+Need to include the _prior_ belief that $p=0.5$. 
+
+This could be empirical (e.g., previously observed 46 out of 100 individuals were male) or subjective (e.g., 50:50 sex ratios are common and make biological sense given meiosis). 
+
+```{r, echo=FALSE}
+ggplot(data.frame(x=0:1), aes(x=x)) + 
+	stat_function(fun=dbeta, args=list(shape1=46+1, shape2=100-46+1), n=1000, aes(color="Emperical"), linetype=2) +
+	stat_function(fun=dbeta, args=list(shape1=25+1, shape2=25+1), n=1000, aes(color="Subjective"), linetype=2) +
+	stat_function(fun=dbeta, args=list(shape1=1, shape2=1), n=1000, aes(color="Flat"), linetype=2) +
+	labs(x="Sex ratio (proportion males)", y="Probability density") + 
+	scale_color_manual("", values=c("red",  "black", "blue"), breaks=c("Emperical", "Subjective", "Flat") )
+```
+
+Or we could use a "flat" prior (aka "uninformative" prior)
+
+A binomial example:
+==================
+
+Then adjust the prior by your new data 
+
+```{r, echo=FALSE}
+ggplot(data.frame(x=0:1), aes(x=x)) + 
+	# priors
+		stat_function(fun=dbeta, args=list(shape1=46+1, shape2=100-46+1), n=1000, aes(color="Emperical"), linetype=2) +
+	stat_function(fun=dbeta, args=list(shape1=25+1, shape2=25+1), n=1000, aes(color="Subjective"), linetype=2) +
+	stat_function(fun=dbeta, args=list(shape1=1, shape2=1), n=1000, aes(color="Flat"), linetype=2) +
+	## posteriors
+	stat_function(fun=dbeta, args=list(shape1=46+1+12, shape2=100-46+1+8), n=1000, aes(color="Emperical")) +
+	stat_function(fun=dbeta, args=list(shape1=25+1+12, shape2=25+1+8), n=1000, aes(color="Subjective")) +
+	stat_function(fun=dbeta, args=list(shape1=1+12, shape2=1+8), n=1000, aes(color="Flat")) +
+	labs(x="Sex ratio (proportion males)", y="Probability density") + 
+	scale_color_manual("", values=c("red",  "black", "blue"), breaks=c("Emperical", "Subjective", "Flat") )
+```
+
+Recap
+==========
+
+The posterior is simply a product of getting your data given the hypothesis (i.e., your likelihood) and the prior probability you ascribe to that hypothesis.
+
+$$ 
+\begin{aligned}
+\text{Pr}(H_i \mid D) &=  \frac{\text{Pr}(D \mid H_i) \times \text{Pr}(H_i)}{\text{Pr}(D)}  \\
+ \\
+\text{Posterior} &=  \frac{\text{Likelihood} \times \text{Prior}}{\text{Pr}(D)} 
+\end{aligned}
+$$
+
+The hard part is sorting out $\text{Pr}(D)$, and this is just for "normalizing" the numerator so that the posterior is a probability.
+
+Probability of the data
+=======================
+In discrete cases:
+------------------
+
+$$
+\text{Pr}(D) = \sum_j \text{Pr}(D \mid H_j) \times \text{Pr}(H_j).
+$$
+In other words, $\text{Pr}(D)$ is just all of the ways you could get your data (the likelihood of getting the data given $H_j$ times the prior probability of $H_j$, for all $j$).
+
+Probability of the data
+=======================
+In continuous cases:
+--------------------
+$$
+\text{Pr}(D) = \int_{-\infty}^{+\infty}  \text{Pr}(D \mid x) \times \text{Pr}(x)dx.
+$$
+
+Have to integrate over the potential distribution of the data. 
+
+Can be done, but in many (most?) cases it involves complex numerical integration.
+
+
+Conjugate priors: the simple, lovely case
+================
+
+* Prior and posterior distribution are the same functional form
+* Only parameters are updated.
+
+E.g., Beta is a conjugate prior for a binomial stochastic model
+
+**Prior**: $Beta(a=46+1=47, \,b=[100-46]+1=55)$  
+**Data**: $x=12$ success out of $n=20$ trials  
+**Posterior**: $Beta(a+x=47+20=67, \,b+n-x=55+[20-12]=63)$  
+
+* Many conjugates, but still a special case.
+    +  Conjugate for Poisson is Gamma
+    +  Conjugate for Normal is Normal
+
+Numeric integration with Metropolis MCMC algorithm
+================
+
+*  The goal is to "sample the posterior distribution", $p(\,)$
+
+1.  start with initial value for parameter $X_t$
+2.  draw a new possible value, $Y$, from symmetric probability distribution
+3.  acceptance probability is $\text{min}\left(1, \frac{p(Y)}{p(X_t)} \right)$  
+		   +  if $p(Y) \geq p(X_t)$, then $Y$ is chosen as $X_{t+1}$ (next value in Markov chain)  
+		   +  if $p(Y) < p(X_t)$, accept $Y$ with probability $\frac{p(Y)}{p(X_t)}$  
+4.  repeat, lots and lots and lots of times
+
+*  Can prove that the samples of the chain, $X_t, X_{t+n}, ...$, are samples from posterior distribution, $p(\,)$
+
+Numeric integration with Metropolis MCMC algorithm
+================
+
+*  Clever bit:
+
+$$p(Y) = \frac{\mathcal{L}(Y) f(Y)}{\int_{-\infty}^{+\infty}  \mathcal{L}(x) f(x) dx}$$
+and 
+$$p(X_t) = \frac{\mathcal{L}(X_t) f(X_t)}{\int_{-\infty}^{+\infty}  \mathcal{L}(x) f(x) dx}$$
+both of which have the hard to calculate integral in the denominator, but they cancel out when we calculate the ratio!
+
+$$\frac{p(Y)}{p(X_t)} = \frac{\mathcal{L}(Y) f(Y)}{\mathcal{L}(X_t) f(X_t)}$$
+
+Numeric integration with Metropolis MCMC algorithm
+================
+
+*  Metropolis-Hastings relaxed assumption of symmetric distribution
+*  Gibbs is a special case
+     +   samples posterior _conditional_ distributions, sequentially
+     +   easier, but takes longer
+     +  generally chuck the first many iterations  
+     +  What is implemented in WinBUGS and JAGS 
+* Hamiltonian Monte Carlo uses a Hamiltonian evolution to reduce correlations between steps and thus converges quicker
+     + Can also handle problems Gibbs sampling cannot
+     + No-U-Turn sampler (NUTS) implemented in Stan, by default
+     
+     
+     
+The point is...
+===============
+
+You, too, can use Bayesian methods...
+
+90% will be fairly simple to learn and understand,  
+
+but the 10% can be tough
+
+so be willing to dive in if you go this way
+
+> Why not?
+> The water's fine
